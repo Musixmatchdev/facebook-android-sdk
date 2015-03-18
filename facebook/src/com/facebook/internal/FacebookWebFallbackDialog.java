@@ -17,15 +17,19 @@
 package com.facebook.internal;
 
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.WebView;
+
 import com.facebook.FacebookException;
 import com.facebook.widget.FacebookDialog;
+import com.facebook.widget.LikeView;
 import com.facebook.widget.WebDialog;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -68,6 +72,13 @@ public class FacebookWebFallbackDialog extends WebDialog {
                         appCall.getRequestCode(),
                         dummyIntent,
                         callback);
+            }
+        });
+
+        fallbackWebDialog.setOnDismissListener(new OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialog) {
+                context.sendBroadcast(new Intent(LikeView.INTENT_FACEBOOK_WEBDIALOG_DISMISSED));
             }
         });
 

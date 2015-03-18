@@ -478,7 +478,7 @@ public class LikeView extends FrameLayout {
         likeBoxCountView.setLayoutParams(likeCountViewLayout);
     }
 
-    private void toggleLike() {
+    public void toggleLike(){
         if (likeActionController != null) {
             Activity activity = null;
             if (parentFragment == null) {
@@ -722,5 +722,36 @@ public class LikeView extends FrameLayout {
 
             LikeView.this.creationCallback = null;
         }
+    }
+
+
+    /************************************
+     * FROM MUSIXMATCH
+     * @return
+     ************************************/
+
+    public static final String INTENT_FACEBOOK_WEBDIALOG_DISMISSED = "com.facebook.widget.LikeView.WebDialogDismissed.MXM";
+
+    public LikeButton getLikeButton() {
+        return likeButton;
+    }
+
+    private FacebookLikeState musixmatchCallback;
+
+    public FacebookLikeState getMusixmatchCallback() {
+        return musixmatchCallback;
+    }
+
+    public void setMusixmatchCallback(FacebookLikeState musixmatchCallback) {
+        this.musixmatchCallback = musixmatchCallback;
+    }
+
+    public static interface FacebookLikeState {
+        public void onReady();
+        public void onUpdated();
+        public void onNotReady();
+        public void onLiked();
+        public void onUnliked();
+
     }
 }
