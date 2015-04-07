@@ -566,10 +566,21 @@ public class LikeView extends FrameLayout {
             likeButton.setLikeState(false);
             socialSentenceView.setText(null);
             likeBoxCountView.setText(null);
+
+            if(musixmatchCallback != null)
+                musixmatchCallback.onNotReady();
+
         } else {
             likeButton.setLikeState(likeActionController.isObjectLiked());
             socialSentenceView.setText(likeActionController.getSocialSentence());
             likeBoxCountView.setText(likeActionController.getLikeCountString());
+
+            if(musixmatchCallback != null){
+                if(likeActionController.isObjectLiked())
+                    musixmatchCallback.onLiked();
+                else
+                    musixmatchCallback.onUnliked();
+            }
         }
 
         updateLayout();
@@ -692,6 +703,10 @@ public class LikeView extends FrameLayout {
 
             if (LikeActionController.ACTION_LIKE_ACTION_CONTROLLER_UPDATED.equals(intentAction)) {
                 updateLikeStateAndLayout();
+
+                if(musixmatchCallback != null)
+                    musixmatchCallback.onUpdated();
+
             } else if (LikeActionController.ACTION_LIKE_ACTION_CONTROLLER_DID_ERROR.equals(intentAction)) {
                 if (onErrorListener != null) {
                     onErrorListener.onError(extras);
@@ -719,6 +734,9 @@ public class LikeView extends FrameLayout {
 
             associateWithLikeActionController(likeActionController);
             updateLikeStateAndLayout();
+
+            if(musixmatchCallback != null)
+                musixmatchCallback.onReady();
 
             LikeView.this.creationCallback = null;
         }
