@@ -5,3 +5,6 @@ if (file('internal/internal-settings.gradle').exists()) {
   apply from: 'internal/internal-settings.gradle'
 }
 
+if (file('local.gradle').exists()) {
+  apply from: 'local.gradle'
+}
