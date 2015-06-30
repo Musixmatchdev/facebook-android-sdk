@@ -292,6 +292,22 @@ public class LikeView extends FrameLayout {
     private boolean explicitlyDisabled;
 
     /**
+     * If your app does not use UiLifeCycleHelper, then you must call this method in the calling activity's
+     * onActivityResult method, to process any pending like actions, where tapping the button had resulted in
+     * the Like dialog being shown in the Facebook application.
+     *
+     * @param requestCode From the originating call to onActivityResult
+     * @param resultCode From the originating call to onActivityResult
+     * @param data From the originating call to onActivityResult
+     * @return Indication of whether the Intent was handled
+     */
+    public static boolean handleOnActivityResult(int requestCode,
+                                                 int resultCode,
+                                                 Intent data) {
+        return LikeActionController.handleOnActivityResult(requestCode, resultCode, data);
+    }
+
+    /**
      * Constructor
      *
      * @param context Context for this View
