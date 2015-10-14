@@ -66,20 +66,36 @@ public final class FacebookRequestError {
     private static final String ERROR_USER_MSG_KEY = "error_user_msg";
     private static final String ERROR_IS_TRANSIENT_KEY = "is_transient";
 
-    private static class Range {
+    public static class Range {
         private final int start, end;
 
-        private Range(int start, int end) {
+        Range(int start, int end) {
             this.start = start;
             this.end = end;
         }
 
-        boolean contains(int value) {
+        public boolean contains(int value) {
             return start <= value && value <= end;
         }
     }
 
-    static final Range HTTP_RANGE_SUCCESS = new Range(200, 299);
+    public static final int EC_UNKNOWN_ERROR = 1;
+    public static final int EC_SERVICE_UNAVAILABLE = 2;
+    public static final int EC_APP_TOO_MANY_CALLS = 4;
+    public static final int EC_USER_TOO_MANY_CALLS = 17;
+    public static final int EC_PERMISSION_DENIED = 10;
+    public static final int EC_INVALID_SESSION = 102;
+    public static final int EC_INVALID_TOKEN = 190;
+    public static final Range EC_RANGE_PERMISSION = new Range(200, 299);
+    public static final int EC_APP_NOT_INSTALLED = 458;
+    public static final int EC_USER_CHECKPOINTED = 459;
+    public static final int EC_PASSWORD_CHANGED = 460;
+    public static final int EC_EXPIRED = 463;
+    public static final int EC_UNCONFIRMED_USER = 464;
+
+    private static final Range HTTP_RANGE_SUCCESS = new Range(200, 299);
+    private static final Range HTTP_RANGE_CLIENT_ERROR = new Range(400, 499);
+    private static final Range HTTP_RANGE_SERVER_ERROR = new Range(500, 599);
 
     private final Category category;
     private final int requestStatusCode;

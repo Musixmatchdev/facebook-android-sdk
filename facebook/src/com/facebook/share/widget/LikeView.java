@@ -292,6 +292,22 @@ public class LikeView extends FrameLayout {
     private boolean explicitlyDisabled;
 
     /**
+     * If your app does not use UiLifeCycleHelper, then you must call this method in the calling activity's
+     * onActivityResult method, to process any pending like actions, where tapping the button had resulted in
+     * the Like dialog being shown in the Facebook application.
+     *
+     * @param requestCode From the originating call to onActivityResult
+     * @param resultCode From the originating call to onActivityResult
+     * @param data From the originating call to onActivityResult
+     * @return Indication of whether the Intent was handled
+     */
+    public static boolean handleOnActivityResult(int requestCode,
+                                                 int resultCode,
+                                                 Intent data) {
+        return LikeActionController.handleOnActivityResult(requestCode, resultCode, data);
+    }
+
+    /**
      * Constructor
      *
      * @param context Context for this View
@@ -550,7 +566,7 @@ public class LikeView extends FrameLayout {
         likeBoxCountView.setLayoutParams(likeCountViewLayout);
     }
 
-    private void toggleLike() {
+    public void toggleLike(){
         if (likeActionController != null) {
             Activity activity = null;
             if (parentFragment == null) {
@@ -658,11 +674,21 @@ public class LikeView extends FrameLayout {
             likeButton.setSelected(false);
             socialSentenceView.setText(null);
             likeBoxCountView.setText(null);
+
+            if(musixmatchCallback != null)
+                musixmatchCallback.onNotReady();
+
         } else {
             likeButton.setSelected(likeActionController.isObjectLiked());
             socialSentenceView.setText(likeActionController.getSocialSentence());
             likeBoxCountView.setText(likeActionController.getLikeCountString());
 
+            if(musixmatchCallback != null){
+                if(likeActionController.isObjectLiked())
+                    musixmatchCallback.onLiked();
+                else
+                    musixmatchCallback.onUnliked();
+            }
             enabled &= likeActionController.shouldEnableView();
         }
 
@@ -795,8 +821,11 @@ public class LikeView extends FrameLayout {
 
             if (LikeActionController.ACTION_LIKE_ACTION_CONTROLLER_UPDATED.equals(intentAction)) {
                 updateLikeStateAndLayout();
-            } else if (LikeActionController.ACTION_LIKE_ACTION_CONTROLLER_DID_ERROR.equals(
-                    intentAction)) {
+
+                if(musixmatchCallback != null)
+                    musixmatchCallback.onUpdated();
+
+            } else if (LikeActionController.ACTION_LIKE_ACTION_CONTROLLER_DID_ERROR.equals(intentAction)) {
                 if (onErrorListener != null) {
                     onErrorListener.onError(NativeProtocol.getExceptionFromErrorData(extras));
                 }
@@ -843,7 +872,41 @@ public class LikeView extends FrameLayout {
                 }
             }
 
+            if(musixmatchCallback != null)
+                musixmatchCallback.onReady();
+
             LikeView.this.creationCallback = null;
         }
+    }
+
+
+    /************************************
+     * FROM MUSIXMATCH
+     * @return
+     ************************************/
+
+    public static final String INTENT_FACEBOOK_WEBDIALOG_DISMISSED = "com.facebook.widget.LikeView.WebDialogDismissed.MXM";
+
+    public LikeButton getLikeButton() {
+        return likeButton;
+    }
+
+    private FacebookLikeState musixmatchCallback;
+
+    public FacebookLikeState getMusixmatchCallback() {
+        return musixmatchCallback;
+    }
+
+    public void setMusixmatchCallback(FacebookLikeState musixmatchCallback) {
+        this.musixmatchCallback = musixmatchCallback;
+    }
+
+    public static interface FacebookLikeState {
+        public void onReady();
+        public void onUpdated();
+        public void onNotReady();
+        public void onLiked();
+        public void onUnliked();
+
     }
 }
