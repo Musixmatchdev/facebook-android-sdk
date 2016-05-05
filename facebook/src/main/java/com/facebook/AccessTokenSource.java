@@ -48,7 +48,12 @@ public enum AccessTokenSource {
      * Indicates an access token was obtained by the user logging in through the
      * Web-based dialog.
      */
-    WEB_VIEW(false),
+    WEB_VIEW(true),
+    /**
+     * Indicates an access token was obtained by the user logging in through the
+     * Web-based dialog on a Chrome Custom Tab.
+     */
+    CUSTOM_TAB(true),
     /**
      * Indicates an access token is for a test user rather than an actual
      * Facebook user.
