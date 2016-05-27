@@ -18,23 +18,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.facebook.share.model;
+package com.facebook.appevents;
 
-import android.os.Parcel;
-
-import com.facebook.share.ShareBuilder;
-
-/**
- * Interface for builders related to sharing.
- * @param <P> The model protocol to be built.
- * @param <E> The concrete builder class.
- */
-public interface ShareModelBuilder<P extends ShareModel, E extends ShareModelBuilder>
-        extends ShareBuilder<P, E> {
-    /**
-     * Reads the values from a ShareModel into the builder.
-     * @param model The source ShareModel
-     * @return The builder.
-     */
-    public E readFrom(P model);
+class FlushStatistics {
+    public int numEvents = 0;
+    public FlushResult result = FlushResult.SUCCESS;
 }
