@@ -197,7 +197,9 @@ public class AppEventsLogger {
 
     /**
      * Notifies the events system that the app has launched and activate and deactivate events
-     * should start being logged automatically. This should be called from the OnCreate method
+     * should start being logged automatically. By default this function is called automatically
+     * from sdkInitialize() flow. In case 'com.facebook.sdk.AutoLogAppEventsEnabled' manifest
+     * setting is set to false, it should typically be called from the OnCreate method
      * of you application.
      *
      * @param application The running application
@@ -208,7 +210,9 @@ public class AppEventsLogger {
 
     /**
      * Notifies the events system that the app has launched and activate and deactivate events
-     * should start being logged automatically. This should be called from the OnCreate method
+     * should start being logged automatically. By default this function is called automatically
+     * from sdkInitialize() flow. In case 'com.facebook.sdk.AutoLogAppEventsEnabled' manifest
+     * setting is set to false, it should typically be called from the OnCreate method
      * of you application.
      *
      * Call this if you wish to use a different Application ID then the one specified in the
@@ -685,12 +689,24 @@ public class AppEventsLogger {
     }
 
     /**
-     * Sets a registration id to register the current app installation for push notifications.
+     * Sets and sends registration id to register the current app for push notifications.
      * @param registrationId RegistrationId received from GCM.
      */
     public static void setPushNotificationsRegistrationId(String registrationId) {
         synchronized (staticLock) {
-            pushNotificationsRegistrationId = registrationId;
+            if (!Utility.stringsEqualOrEmpty(pushNotificationsRegistrationId, registrationId))
+            {
+                pushNotificationsRegistrationId = registrationId;
+
+                AppEventsLogger logger = AppEventsLogger.newLogger(
+                        FacebookSdk.getApplicationContext());
+                // Log implicit push token event and flush logger immediately
+                logger.logEvent(AppEventsConstants.EVENT_NAME_PUSH_TOKEN_OBTAINED);
+                if (AppEventsLogger.getFlushBehavior() !=
+                        AppEventsLogger.FlushBehavior.EXPLICIT_ONLY) {
+                    logger.flush();
+                }
+            }
         }
     }
 

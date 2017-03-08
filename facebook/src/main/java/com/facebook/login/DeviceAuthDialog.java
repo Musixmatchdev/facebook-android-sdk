@@ -167,7 +167,7 @@ public class DeviceAuthDialog extends DialogFragment {
 
     public void startLogin(final LoginClient.Request request) {
         this.mRequest = request;
-        Bundle parameters = new Bundle();
+        final Bundle parameters = new Bundle();
         parameters.putString("scope", TextUtils.join(",", request.getPermissions()));
 
         String redirectUriString = request.getDeviceRedirectUriString();
@@ -188,6 +188,9 @@ public class DeviceAuthDialog extends DialogFragment {
                 new GraphRequest.Callback() {
             @Override
             public void onCompleted(GraphResponse response) {
+                if (isBeingDestroyed) {
+                    return;
+                }
                 if (response.getError() != null) {
                     onError(response.getError().getException());
                     return;
@@ -231,47 +234,11 @@ public class DeviceAuthDialog extends DialogFragment {
         }
     }
 
-    private void appendIconToTextView(final TextView textView, final String iconUriString) {
-        final int iconSize = 24;
-        ImageRequest request = new ImageRequest.Builder(
-                this.getContext(),
-                Uri.parse(iconUriString))
-                .setCallback( new ImageRequest.Callback() {
-                    @Override
-                    public void onCompleted(ImageResponse response) {
-                        if (response.getBitmap() != null) {
-                            Bitmap bitmap = Bitmap.createScaledBitmap(response.getBitmap(),
-                                    iconSize, iconSize, false);
-                            BitmapDrawable drawable = new BitmapDrawable(getResources(),
-                                    bitmap);
-                            textView.setCompoundDrawablesWithIntrinsicBounds(
-                                    null, null, drawable, null);
-                        }
-
-                    }
-                }).build();
-        ImageDownloader.downloadAsync(request);
-    }
-
     private View initializeContentView(boolean isSmartLogin) {
         View view;
         LayoutInflater inflater = this.getActivity().getLayoutInflater();
         if (isSmartLogin) {
             view = inflater.inflate(R.layout.com_facebook_smart_device_dialog_fragment, null);
-
-            FetchedAppSettings settings =
-                    FetchedAppSettingsManager.getAppSettingsWithoutQuery(
-                            FacebookSdk.getApplicationId());
-            if (settings.getSmartLoginBookmarkIconURL() != null) {
-                final TextView instructions2 = (TextView)view.findViewById(
-                        R.id.com_facebook_smart_instructions_2);
-                this.appendIconToTextView(instructions2, settings.getSmartLoginBookmarkIconURL());
-            }
-            if (settings.getSmartLoginMenuIconURL() != null) {
-                final TextView instructions1 = (TextView)view.findViewById(
-                        R.id.com_facebook_smart_instructions_1);
-                this.appendIconToTextView(instructions1, settings.getSmartLoginMenuIconURL());
-            }
         } else {
             view = inflater.inflate(R.layout.com_facebook_device_auth_dialog_fragment, null);
         }
@@ -480,7 +447,9 @@ public class DeviceAuthDialog extends DialogFragment {
             return;
         }
 
-        DeviceRequestsHelper.cleanUpAdvertisementService(currentRequestState.getUserCode());
+        if (currentRequestState != null) {
+            DeviceRequestsHelper.cleanUpAdvertisementService(currentRequestState.getUserCode());
+        }
 
         if (deviceAuthMethodHandler != null) {
             // We are detached and cannot send a cancel message back

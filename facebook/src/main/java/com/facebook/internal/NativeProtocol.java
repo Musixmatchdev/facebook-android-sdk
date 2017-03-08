@@ -33,6 +33,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -71,6 +72,8 @@ public final class NativeProtocol {
     public static final String FACEBOOK_PROXY_AUTH_PERMISSIONS_KEY = "scope";
     public static final String FACEBOOK_PROXY_AUTH_APP_ID_KEY = "client_id";
     public static final String FACEBOOK_PROXY_AUTH_E2E_KEY = "e2e";
+
+    public static final String FACEBOOK_SDK_VERSION_KEY = "facebook_sdk_version";
 
     // ---------------------------------------------------------------------------------------------
     // Native Protocol updated 2012-11
@@ -473,6 +476,8 @@ public final class NativeProtocol {
                 .setClassName(appInfo.getPackage(), activityName)
                 .putExtra(FACEBOOK_PROXY_AUTH_APP_ID_KEY, applicationId);
 
+        intent.putExtra(FACEBOOK_SDK_VERSION_KEY, FacebookSdk.getSdkVersion());
+
         if (!Utility.isNullOrEmpty(permissions)) {
             intent.putExtra(
                     FACEBOOK_PROXY_AUTH_PERMISSIONS_KEY, TextUtils.join(",", permissions));
@@ -568,30 +573,6 @@ public final class NativeProtocol {
                     PROTOCOL_VERSION_20121101
             );
 
-    private static Intent findActivityIntent(
-            Context context,
-            String activityAction,
-            String internalAction) {
-        List<NativeAppInfo> list = actionToAppInfoMap.get(internalAction);
-        if (list == null) {
-            return null;
-        }
-
-        Intent intent = null;
-        for (NativeAppInfo appInfo : list) {
-            intent = new Intent()
-                    .setAction(activityAction)
-                    .setPackage(appInfo.getPackage())
-                    .addCategory(Intent.CATEGORY_DEFAULT);
-            intent = validateActivityIntent(context, intent, appInfo);
-            if (intent != null) {
-                return intent;
-            }
-        }
-
-        return intent;
-    }
-
     public static boolean isVersionCompatibleWithBucketedIntent(int version) {
         return KNOWN_PROTOCOL_VERSIONS.contains(version) && version >= PROTOCOL_VERSION_20140701;
     }
@@ -604,14 +585,27 @@ public final class NativeProtocol {
             Context context,
             String callId,
             String action,
-            int version,
+            ProtocolVersionQueryResult versionResult,
             Bundle extras) {
-        Intent intent = findActivityIntent(context, INTENT_ACTION_PLATFORM_ACTIVITY, action);
+        if (versionResult == null) {
+            return null;
+        }
+
+        NativeAppInfo appInfo = versionResult.nativeAppInfo;
+        if (appInfo == null) {
+            return null;
+        }
+
+        Intent intent = new Intent()
+                .setAction(INTENT_ACTION_PLATFORM_ACTIVITY)
+                .setPackage(appInfo.getPackage())
+                .addCategory(Intent.CATEGORY_DEFAULT);
+        intent = validateActivityIntent(context, intent, appInfo);
         if (intent == null) {
             return null;
         }
 
-        setupProtocolRequestIntent(intent, callId, action, version, extras);
+        setupProtocolRequestIntent(intent, callId, action, versionResult.protocolVersion, extras);
 
         return intent;
     }
@@ -815,24 +809,24 @@ public final class NativeProtocol {
     public static int getLatestAvailableProtocolVersionForService(final int minimumVersion) {
         // Services are currently always against the Facebook App
         return getLatestAvailableProtocolVersionForAppInfoList(
-                facebookAppInfoList, new int[]{minimumVersion});
+                facebookAppInfoList, new int[]{minimumVersion}).getProtocolVersion();
     }
 
-    public static int getLatestAvailableProtocolVersionForAction(
+    public static ProtocolVersionQueryResult getLatestAvailableProtocolVersionForAction(
             String action,
             int[] versionSpec) {
         List<NativeAppInfo> appInfoList = actionToAppInfoMap.get(action);
         return getLatestAvailableProtocolVersionForAppInfoList(appInfoList, versionSpec);
     }
 
-    private static int getLatestAvailableProtocolVersionForAppInfoList(
+    private static ProtocolVersionQueryResult getLatestAvailableProtocolVersionForAppInfoList(
             List<NativeAppInfo> appInfoList,
             int[] versionSpec) {
         // Kick off an update
         updateAllAvailableProtocolVersionsAsync();
 
         if (appInfoList == null) {
-            return NO_PROTOCOL_AVAILABLE;
+            return ProtocolVersionQueryResult.createEmpty();
         }
 
         // Could potentially cache the NativeAppInfo to latestProtocolVersion
@@ -844,11 +838,11 @@ public final class NativeProtocol {
                             versionSpec);
 
             if (protocolVersion != NO_PROTOCOL_AVAILABLE) {
-                return protocolVersion;
+                return ProtocolVersionQueryResult.create(appInfo, protocolVersion);
             }
         }
 
-        return NO_PROTOCOL_AVAILABLE;
+        return ProtocolVersionQueryResult.createEmpty();
     }
 
     public static void updateAllAvailableProtocolVersionsAsync() {
@@ -972,5 +966,38 @@ public final class NativeProtocol {
 
     private static Uri buildPlatformProviderVersionURI(NativeAppInfo appInfo) {
         return Uri.parse(CONTENT_SCHEME + appInfo.getPackage() + PLATFORM_PROVIDER_VERSIONS);
+    }
+
+    public static class ProtocolVersionQueryResult {
+        private NativeAppInfo nativeAppInfo;
+        private int protocolVersion;
+
+        public static ProtocolVersionQueryResult create(
+                NativeAppInfo nativeAppInfo,
+                int protocolVersion) {
+            ProtocolVersionQueryResult result = new ProtocolVersionQueryResult();
+            result.nativeAppInfo = nativeAppInfo;
+            result.protocolVersion = protocolVersion;
+
+            return result;
+        }
+
+        public static ProtocolVersionQueryResult createEmpty() {
+            ProtocolVersionQueryResult result = new ProtocolVersionQueryResult();
+            result.protocolVersion = NO_PROTOCOL_AVAILABLE;
+
+            return result;
+        }
+
+        private ProtocolVersionQueryResult() {
+        }
+
+        public @Nullable NativeAppInfo getAppInfo() {
+            return nativeAppInfo;
+        }
+
+        public int getProtocolVersion() {
+            return protocolVersion;
+        }
     }
 }
