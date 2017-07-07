@@ -93,6 +93,7 @@ public final class NativeProtocol {
     public static final int PROTOCOL_VERSION_20141107 = 20141107; // Bucketed Result Intents
     public static final int PROTOCOL_VERSION_20141218 = 20141218;
     public static final int PROTOCOL_VERSION_20160327 = 20160327;
+    public static final int PROTOCOL_VERSION_20170411 = 20170411; // express login
 
     public static final String EXTRA_PROTOCOL_VERSION =
             "com.facebook.platform.protocol.PROTOCOL_VERSION";
@@ -133,6 +134,10 @@ public final class NativeProtocol {
     public static final int MESSAGE_GET_INSTALL_DATA_REPLY      = 0x10005;
     public static final int MESSAGE_GET_LIKE_STATUS_REQUEST     = 0x10006;
     public static final int MESSAGE_GET_LIKE_STATUS_REPLY       = 0x10007;
+    public static final int MESSAGE_GET_AK_SEAMLESS_TOKEN_REQUEST = 0x10008;
+    public static final int MESSAGE_GET_AK_SEAMLESS_TOKEN_REPLY   = 0x10009;
+    public static final int MESSAGE_GET_LOGIN_STATUS_REQUEST   = 0x1000A;
+    public static final int MESSAGE_GET_LOGIN_STATUS_REPLY   = 0x1000B;
 
     // MESSAGE_ERROR_REPLY data keys:
     // See STATUS_*
@@ -181,6 +186,11 @@ public final class NativeProtocol {
     public static final String EXTRA_APPLICATION_NAME =
             "com.facebook.platform.extra.APPLICATION_NAME";
     public static final String EXTRA_USER_ID = "com.facebook.platform.extra.USER_ID";
+    public static final String EXTRA_LOGGER_REF = "com.facebook.platform.extra.LOGGER_REF";
+    public static final String EXTRA_TOAST_DURATION_MS =
+            "com.facebook.platform.extra.EXTRA_TOAST_DURATION_MS";
+    public static final String EXTRA_GRAPH_API_VERSION =
+            "com.facebook.platform.extra.GRAPH_API_VERSION";
 
     // Extras returned by setResult() for ACTION_LOGIN_DIALOG
     public static final String EXTRA_ACCESS_TOKEN = "com.facebook.platform.extra.ACCESS_TOKEN";
@@ -189,9 +199,22 @@ public final class NativeProtocol {
     // EXTRA_PERMISSIONS
 
     public static final String RESULT_ARGS_ACCESS_TOKEN = "access_token";
+    public static final String RESULT_ARGS_SIGNED_REQUEST = "signed request";
     public static final String RESULT_ARGS_EXPIRES_SECONDS_SINCE_EPOCH =
             "expires_seconds_since_epoch";
     public static final String RESULT_ARGS_PERMISSIONS = "permissions";
+    public static final String EXTRA_ARGS_PROFILE = "com.facebook.platform.extra.PROFILE";
+    public static final String EXTRA_ARGS_PROFILE_NAME = "com.facebook.platform.extra.PROFILE_NAME";
+    public static final String EXTRA_ARGS_PROFILE_LAST_NAME =
+            "com.facebook.platform.extra.PROFILE_LAST_NAME";
+    public static final String EXTRA_ARGS_PROFILE_FIRST_NAME =
+            "com.facebook.platform.extra.PROFILE_FIRST_NAME";
+    public static final String EXTRA_ARGS_PROFILE_MIDDLE_NAME =
+            "com.facebook.platform.extra.PROFILE_MIDDLE_NAME";
+    public static final String EXTRA_ARGS_PROFILE_LINK =
+            "com.facebook.platform.extra.PROFILE_LINK";
+    public static final String EXTRA_ARGS_PROFILE_USER_ID =
+            "com.facebook.platform.extra.PROFILE_USER_ID";
 
     // OG objects will have this key to set to true if they should be created as part of OG Action
     // publish
@@ -245,53 +268,7 @@ public final class NativeProtocol {
         abstract protected String getPackage();
         abstract protected String getLoginActivity();
 
-        private static final String FBI_HASH = "a4b7452e2ed8f5f191058ca7bbfd26b0d3214bfc";
-        private static final String FBL_HASH = "5e8f16062ea3cd2c4a0d547876baa6f38cabf625";
-        private static final String FBR_HASH = "8a3c4b262d721acd49a4bf97d5213199c86fa2b9";
-
-        private static final HashSet<String> validAppSignatureHashes = buildAppSignatureHashes();
-
         private TreeSet<Integer> availableVersions;
-
-        private static HashSet<String> buildAppSignatureHashes() {
-            HashSet<String> set = new HashSet<String>();
-            set.add(FBR_HASH);
-            set.add(FBI_HASH);
-            set.add(FBL_HASH);
-            return set;
-        }
-
-        public boolean validateSignature(Context context, String packageName) {
-            String brand = Build.BRAND;
-            int applicationFlags = context.getApplicationInfo().flags;
-            if (brand.startsWith("generic") &&
-                    (applicationFlags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-                // We are debugging on an emulator, don't validate package signature.
-                return true;
-            }
-
-            PackageInfo packageInfo;
-            try {
-                packageInfo = context.getPackageManager().getPackageInfo(packageName,
-                        PackageManager.GET_SIGNATURES);
-            } catch (PackageManager.NameNotFoundException e) {
-                return false;
-            }
-
-            // just in case
-            if (packageInfo.signatures == null || packageInfo.signatures.length <= 0) {
-                return false;
-            }
-
-            for (Signature signature : packageInfo.signatures) {
-                String hashedSignature = Utility.sha1hash(signature.toByteArray());
-                if (!validAppSignatureHashes.contains(hashedSignature)) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
 
         public TreeSet<Integer> getAvailableVersions() {
             if (availableVersions == null) {
@@ -407,7 +384,9 @@ public final class NativeProtocol {
             return null;
         }
 
-        if (!appInfo.validateSignature(context, resolveInfo.activityInfo.packageName)) {
+        if (!FacebookSignatureValidator.validateSignature(
+            context,
+            resolveInfo.activityInfo.packageName)) {
             return null;
         }
 
@@ -424,7 +403,9 @@ public final class NativeProtocol {
             return null;
         }
 
-        if (!appInfo.validateSignature(context, resolveInfo.serviceInfo.packageName)) {
+        if (!FacebookSignatureValidator.validateSignature(
+            context,
+            resolveInfo.serviceInfo.packageName)) {
             return null;
         }
 
@@ -570,8 +551,7 @@ public final class NativeProtocol {
                     PROTOCOL_VERSION_20131107,
                     PROTOCOL_VERSION_20130618,
                     PROTOCOL_VERSION_20130502,
-                    PROTOCOL_VERSION_20121101
-            );
+                    PROTOCOL_VERSION_20121101);
 
     public static boolean isVersionCompatibleWithBucketedIntent(int version) {
         return KNOWN_PROTOCOL_VERSIONS.contains(version) && version >= PROTOCOL_VERSION_20140701;
