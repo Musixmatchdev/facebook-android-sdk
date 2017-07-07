@@ -27,6 +27,7 @@ import android.os.Bundle;
 import android.os.ConditionVariable;
 
 import com.facebook.internal.CallbackManagerImpl;
+import com.facebook.internal.FetchedAppSettingsManager;
 import com.facebook.internal.ServerProtocol;
 import com.facebook.internal.Utility;
 
@@ -48,14 +49,14 @@ import static org.mockito.Mockito.when;
 import static org.powermock.api.support.membermodification.MemberMatcher.method;
 import static org.powermock.api.support.membermodification.MemberModifier.stub;
 
-@PrepareForTest({ FacebookSdk.class, Utility.class })
+@PrepareForTest({ FacebookSdk.class, Utility.class, FetchedAppSettingsManager.class})
 public final class FacebookSdkPowerMockTest extends FacebookPowerMockTestCase {
 
     @Before
     public void before() {
         Whitebox.setInternalState(FacebookSdk.class, "callbackRequestCodeOffset", 0xface);
         Whitebox.setInternalState(FacebookSdk.class, "sdkInitialized", false);
-        stub(method(Utility.class, "loadAppSettingsAsync")).toReturn(null);
+        stub(method(FetchedAppSettingsManager.class, "loadAppSettingsAsync")).toReturn(null);
 
     }
 
@@ -117,6 +118,8 @@ public final class FacebookSdkPowerMockTest extends FacebookPowerMockTestCase {
 
     @Test
     public void testLoadDefaults() throws Exception {
+        // Set to null since the value might have been set by another test
+        FacebookSdk.setApplicationId(null);
         stub(method(FacebookSdk.class, "isInitialized")).toReturn(true);
         FacebookSdk.loadDefaultsFromMetadata(mockContextWithAppIdAndClientToken());
 
@@ -148,15 +151,18 @@ public final class FacebookSdkPowerMockTest extends FacebookPowerMockTestCase {
         stub(method(FacebookSdk.class, "isInitialized")).toReturn(true);
         FacebookSdk.setApplicationId("hello");
         FacebookSdk.setClientToken("world");
+        FacebookSdk.setAutoLogAppEventsEnabled(false);
 
         FacebookSdk.loadDefaultsFromMetadata(mockContextWithAppIdAndClientToken());
 
         assertEquals("hello", FacebookSdk.getApplicationId());
         assertEquals("world", FacebookSdk.getClientToken());
+        assertEquals(false, FacebookSdk.getAutoLogAppEventsEnabled());
     }
 
     @Test
     public void testRequestCodeOffsetAfterInit() throws Exception {
+        FacebookSdk.setApplicationId("123456789");
         FacebookSdk.sdkInitialize(RuntimeEnvironment.application);
 
         try {
@@ -169,6 +175,7 @@ public final class FacebookSdkPowerMockTest extends FacebookPowerMockTestCase {
 
     @Test
     public void testRequestCodeOffsetNegative() throws Exception {
+        FacebookSdk.setApplicationId("123456789");
         try {
             // last bit set, so negative
             FacebookSdk.sdkInitialize(RuntimeEnvironment.application, 0xFACEB00C);
@@ -180,12 +187,14 @@ public final class FacebookSdkPowerMockTest extends FacebookPowerMockTestCase {
 
     @Test
     public void testRequestCodeOffset() throws Exception {
+        FacebookSdk.setApplicationId("123456789");
         FacebookSdk.sdkInitialize(RuntimeEnvironment.application, 1000);
         assertEquals(1000, FacebookSdk.getCallbackRequestCodeOffset());
     }
 
     @Test
     public void testRequestCodeRange() {
+        FacebookSdk.setApplicationId("123456789");
         FacebookSdk.sdkInitialize(RuntimeEnvironment.application, 1000);
         assertTrue(FacebookSdk.isFacebookRequestCode(1000));
         assertTrue(FacebookSdk.isFacebookRequestCode(1099));

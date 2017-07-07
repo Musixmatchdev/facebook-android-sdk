@@ -24,8 +24,10 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.os.Bundle;
 import android.content.Context;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 
 import com.facebook.AccessToken;
@@ -36,14 +38,19 @@ import com.facebook.FacebookCallback;
 import com.facebook.FacebookException;
 import com.facebook.FacebookSdk;
 import com.facebook.GraphResponse;
+import com.facebook.LoginStatusCallback;
 import com.facebook.Profile;
 import com.facebook.internal.CallbackManagerImpl;
 import com.facebook.internal.FragmentWrapper;
+import com.facebook.internal.NativeProtocol;
+import com.facebook.internal.Utility;
 import com.facebook.internal.Validate;
 import com.facebook.appevents.AppEventsConstants;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -165,6 +172,20 @@ public class LoginManager {
         );
     }
 
+    /**
+     * Unregisters a login callback to the given callback manager.
+     * @param callbackManager The callback manager that will encapsulate the callback.
+     */
+    public void unregisterCallback(
+            final CallbackManager callbackManager) {
+        if (!(callbackManager instanceof CallbackManagerImpl)) {
+            throw new FacebookException("Unexpected CallbackManager, " +
+                    "please use the provided Factory.");
+        }
+        ((CallbackManagerImpl) callbackManager).unregisterCallback(
+                CallbackManagerImpl.RequestCodeOffset.Login.toRequestCode());
+    }
+
     boolean onActivityResult(int resultCode, Intent data) {
         return onActivityResult(resultCode, data, null);
     }
@@ -179,7 +200,7 @@ public class LoginManager {
         boolean isCanceled = false;
         if (data != null) {
             LoginClient.Result result =
-                    (LoginClient.Result) data.getParcelableExtra(LoginFragment.RESULT_KEY);
+                    data.getParcelableExtra(LoginFragment.RESULT_KEY);
             if (result != null) {
                 originalRequest = result.request;
                 code = result.code;
@@ -260,6 +281,38 @@ public class LoginManager {
     public void logOut() {
         AccessToken.setCurrentAccessToken(null);
         Profile.setCurrentProfile(null);
+    }
+
+    /**
+     * Retrieves the login status for the user. This will return an access token for the app if
+     * a user is logged into the Facebook for Android app on the same device and that user had
+     * previously logged into the app.
+     * If an access token was retrieved then a toast will be shown telling the user that they have
+     * been logged in.
+     * @param context An Android context
+     * @param responseCallback The callback to be called when the request completes
+     */
+    public void retrieveLoginStatus(
+            final Context context,
+            final LoginStatusCallback responseCallback) {
+        retrieveLoginStatus(context, LoginStatusClient.DEFAULT_TOAST_DURATION_MS, responseCallback);
+    }
+
+    /**
+     * Retrieves the login status for the user. This will return an access token for the app if
+     * a user is logged into the Facebook for Android app on the same device and that user had
+     * previously logged into the app.
+     * If an access token was retrieved then a toast will be shown telling the user that they have
+     * been logged in.
+     * @param context An Android context
+     * @param responseCallback The callback to be called when the request completes
+     * @param toastDurationMs The duration to show the success toast in milliseconds
+     */
+    public void retrieveLoginStatus(
+            final Context context,
+            final long toastDurationMs,
+            final LoginStatusCallback responseCallback) {
+        retrieveLoginStatusImpl(context, responseCallback, toastDurationMs);
     }
 
     /**
@@ -403,7 +456,7 @@ public class LoginManager {
         return Collections.unmodifiableSet(set);
     }
 
-    private LoginClient.Request createLoginRequest(Collection<String> permissions) {
+    protected LoginClient.Request createLoginRequest(Collection<String> permissions) {
         LoginClient.Request request = new LoginClient.Request(
                 loginBehavior,
                 Collections.unmodifiableSet(
@@ -517,22 +570,18 @@ public class LoginManager {
     private boolean resolveIntent(Intent intent) {
         ResolveInfo resolveInfo = FacebookSdk.getApplicationContext().getPackageManager()
             .resolveActivity(intent, 0);
-        if (resolveInfo == null) {
-            return false;
-        }
-        return true;
+        return resolveInfo != null;
     }
 
-    private Intent getFacebookActivityIntent(LoginClient.Request request) {
+    protected Intent getFacebookActivityIntent(LoginClient.Request request) {
         Intent intent = new Intent();
         intent.setClass(FacebookSdk.getApplicationContext(), FacebookActivity.class);
         intent.setAction(request.getLoginBehavior().toString());
 
         // Let FacebookActivity populate extras appropriately
-        LoginClient.Request authClientRequest = request;
         Bundle extras = new Bundle();
         extras.putParcelable(LoginFragment.EXTRA_REQUEST, request);
-        intent.putExtras(extras);
+        intent.putExtra(LoginFragment.REQUEST_KEY, extras);
 
         return intent;
     }
@@ -583,6 +632,136 @@ public class LoginManager {
         }
     }
 
+    private void retrieveLoginStatusImpl(
+            final Context context,
+            final LoginStatusCallback responseCallback,
+            final long toastDurationMs) {
+            final String applicationId = FacebookSdk.getApplicationId();
+            final String loggerRef = UUID.randomUUID().toString();
+        final LoginStatusClient client
+                = new LoginStatusClient(
+                        context,
+                        applicationId,
+                        loggerRef,
+                        FacebookSdk.getGraphApiVersion(),
+                        toastDurationMs);
+
+        final LoginLogger logger = new LoginLogger(context, applicationId);
+
+        final LoginStatusClient.CompletedListener callback =
+            new LoginStatusClient.CompletedListener() {
+                @Override
+                public void completed(Bundle result) {
+                    if (result != null) {
+
+                        final String errorType = result.getString(NativeProtocol.STATUS_ERROR_TYPE);
+                        final String errorDescription =
+                                result.getString(NativeProtocol.STATUS_ERROR_DESCRIPTION);
+                        if (errorType != null) {
+                            handleLoginStatusError(
+                                    errorType,
+                                    errorDescription,
+                                    loggerRef,
+                                    logger,
+                                    responseCallback);
+                        } else {
+                            final String token =
+                                    result.getString(NativeProtocol.EXTRA_ACCESS_TOKEN);
+                            final long expires =
+                                    result.getLong(
+                                            NativeProtocol.EXTRA_EXPIRES_SECONDS_SINCE_EPOCH);
+                            final ArrayList<String> permissions =
+                                    result.getStringArrayList(NativeProtocol.EXTRA_PERMISSIONS);
+                            final String signedRequest =
+                                    result.getString(NativeProtocol.RESULT_ARGS_SIGNED_REQUEST);
+                            String userId = null;
+                            if (!Utility.isNullOrEmpty(signedRequest)) {
+                                userId =
+                                    LoginMethodHandler.getUserIDFromSignedRequest(signedRequest);
+                            }
+
+                            if (!Utility.isNullOrEmpty(token) &&
+                                    permissions != null &&
+                                    !permissions.isEmpty() &&
+                                    !Utility.isNullOrEmpty(userId)) {
+                                final AccessToken accessToken = new AccessToken(
+                                        token,
+                                        applicationId,
+                                        userId,
+                                        permissions,
+                                        null,
+                                        null,
+                                        new Date(expires),
+                                        null);
+                                AccessToken.setCurrentAccessToken(accessToken);
+
+                                final Profile profile = getProfileFromBundle(result);
+                                if (profile != null) {
+                                    Profile.setCurrentProfile(profile);
+                                } else {
+                                    Profile.fetchProfileForCurrentAccessToken();
+                                }
+
+                                logger.logLoginStatusSuccess(loggerRef);
+                                responseCallback.onCompleted(accessToken);
+                            } else {
+                                logger.logLoginStatusFailure(loggerRef);
+                                responseCallback.onFailure();
+                            }
+                        }
+                    } else {
+                        logger.logLoginStatusFailure(loggerRef);
+                        responseCallback.onFailure();
+                    }
+                }
+            };
+
+        client.setCompletedListener(callback);
+        logger.logLoginStatusStart(loggerRef);
+        if (!client.start()) {
+            logger.logLoginStatusFailure(loggerRef);
+            responseCallback.onFailure();
+        };
+    }
+
+    @Nullable
+    private static Profile getProfileFromBundle(Bundle result) {
+        final String name = result.getString(NativeProtocol.EXTRA_ARGS_PROFILE_NAME);
+        final String firstName = result.getString(NativeProtocol.EXTRA_ARGS_PROFILE_FIRST_NAME);
+        final String middleName = result.getString(NativeProtocol.EXTRA_ARGS_PROFILE_MIDDLE_NAME);
+        final String lastName = result.getString(NativeProtocol.EXTRA_ARGS_PROFILE_LAST_NAME);
+        final String link = result.getString(NativeProtocol.EXTRA_ARGS_PROFILE_LINK);
+        final String appScopedUserId = result.getString(NativeProtocol.EXTRA_ARGS_PROFILE_USER_ID);
+
+        if (name != null &&
+            firstName != null &&
+            middleName != null &&
+            lastName != null &&
+            link != null &&
+            appScopedUserId != null) {
+
+            return new Profile(
+                    appScopedUserId,
+                    firstName,
+                    middleName,
+                    lastName,
+                    name,
+                    Uri.parse(link));
+        }
+        return null;
+    }
+
+    private static void handleLoginStatusError(
+            final String errorType,
+            final String errorDescription,
+            final String loggerRef,
+            final LoginLogger logger,
+            final LoginStatusCallback responseCallback) {
+        final Exception exception = new FacebookException(errorType + ": " + errorDescription);
+        logger.logLoginStatusError(loggerRef, exception);
+        responseCallback.onError(exception);
+    }
+
     private static class ActivityStartActivityDelegate implements StartActivityDelegate {
         private final Activity activity;
 
@@ -622,7 +801,7 @@ public class LoginManager {
     }
 
     private static class LoginLoggerHolder {
-        private static volatile LoginLogger logger;
+        private static LoginLogger logger;
 
         private static synchronized LoginLogger getLogger(Context context) {
             context = context != null ? context : FacebookSdk.getApplicationContext();

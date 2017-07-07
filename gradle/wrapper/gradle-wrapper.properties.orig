@@ -1,0 +1,14 @@
+<<<<<<< HEAD
+#Thu May 05 11:41:06 CEST 2016
+=======
+#Fri May 13 11:07:42 PDT 2016
+>>>>>>> upstream/master
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+<<<<<<< HEAD
+distributionUrl=https\://services.gradle.org/distributions/gradle-2.10-all.zip
+=======
+distributionUrl=https\://services.gradle.org/distributions/gradle-2.10-bin.zip
+>>>>>>> upstream/master

@@ -26,6 +26,8 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
+
+import com.facebook.FacebookSdk;
 import com.facebook.TestUtils;
 
 import java.io.IOException;
@@ -37,19 +39,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public final class ImageResponseCacheTest extends AndroidTestCase {
-
-    @LargeTest
-    public void testImageCaching() throws Exception {
-        // In unit test, since we need verify first access the image is not in cache
-        // we need clear the cache first
-        TestUtils.clearFileLruCache(ImageResponseCache.getCache(safeGetContext()));
-        String imgUrl = "http://profile.ak.fbcdn.net/hprofile-ak-frc1/369438_100003049100322_615834658_n.jpg";
-
-        Bitmap bmp1 = readImage(imgUrl, false);
-        Bitmap bmp2 = readImage(imgUrl, true);
-        compareImages(bmp1, bmp2);
-    }
-
     @LargeTest
     public void testImageNotCaching() throws IOException {
 

@@ -98,7 +98,7 @@ public class GraphRequest {
     private static final String FORMAT_JSON = "json";
     private static final String SDK_PARAM = "sdk";
     private static final String SDK_ANDROID = "android";
-    private static final String ACCESS_TOKEN_PARAM = "access_token";
+    public static final String ACCESS_TOKEN_PARAM = "access_token";
     private static final String BATCH_ENTRY_NAME_PARAM = "name";
     private static final String BATCH_ENTRY_OMIT_RESPONSE_ON_SUCCESS_PARAM =
             "omit_response_on_success";
@@ -257,7 +257,7 @@ public class GraphRequest {
         }
 
         if (this.version == null) {
-            this.version = ServerProtocol.getAPIVersion();
+            this.version = FacebookSdk.getGraphApiVersion();
         }
     }
 
@@ -541,6 +541,10 @@ public class GraphRequest {
             parameters.putAll(params);
         }
         parameters.putParcelable(PICTURE_PARAM, photoUri);
+
+        if (caption != null && !caption.isEmpty()) {
+            parameters.putString(CAPTION_PARAM, caption);
+        }
 
         return new GraphRequest(accessToken, graphPath, parameters, HttpMethod.POST, callback);
     }
@@ -1222,7 +1226,7 @@ public class GraphRequest {
         Validate.notEmptyAndContainsNoNulls(requests, "requests");
 
         GraphRequestAsyncTask asyncTask = new GraphRequestAsyncTask(requests);
-        asyncTask.executeOnExecutor(FacebookSdk.getExecutor(), null);
+        asyncTask.executeOnExecutor(FacebookSdk.getExecutor());
         return asyncTask;
     }
 
@@ -1331,7 +1335,7 @@ public class GraphRequest {
 
         GraphRequestAsyncTask asyncTask = new GraphRequestAsyncTask(connection, requests);
         requests.setCallbackHandler(callbackHandler);
-        asyncTask.executeOnExecutor(FacebookSdk.getExecutor(), null);
+        asyncTask.executeOnExecutor(FacebookSdk.getExecutor());
         return asyncTask;
     }
 
@@ -1442,7 +1446,7 @@ public class GraphRequest {
     }
 
     private String appendParametersToBaseUrl(String baseUrl) {
-        Uri.Builder uriBuilder = new Uri.Builder().encodedPath(baseUrl);
+        Uri.Builder uriBuilder = Uri.parse(baseUrl).buildUpon();
 
         Set<String> keys = this.parameters.keySet();
         for (String key : keys) {
@@ -1471,14 +1475,18 @@ public class GraphRequest {
         return uriBuilder.toString();
     }
 
-    final String getUrlForBatchedRequest() {
+    final String getRelativeUrlForBatchedRequest() {
         if (overriddenURL != null) {
             throw new FacebookException("Can't override URL for a batch request");
         }
 
-        String baseUrl = getGraphPathWithVersion();
+        String baseUrl =
+                String.format("%s/%s", ServerProtocol.getGraphUrlBase(), getGraphPathWithVersion());
         addCommonParameters();
-        return appendParametersToBaseUrl(baseUrl);
+        String fullUrl = appendParametersToBaseUrl(baseUrl);
+        Uri uri = Uri.parse(fullUrl);
+        String relativeUrl = String.format("%s?%s", uri.getPath(), uri.getQuery());
+        return relativeUrl;
     }
 
     final String getUrlForSingleRequest() {
@@ -1542,7 +1550,7 @@ public class GraphRequest {
             batchEntry.put(BATCH_ENTRY_DEPENDS_ON_PARAM, this.batchEntryDependsOn);
         }
 
-        String relativeURL = getUrlForBatchedRequest();
+        String relativeURL = getRelativeUrlForBatchedRequest();
         batchEntry.put(BATCH_RELATIVE_URL_PARAM, relativeURL);
         batchEntry.put(BATCH_METHOD_PARAM, httpMethod);
         if (this.accessToken != null) {

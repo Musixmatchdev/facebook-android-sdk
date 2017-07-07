@@ -20,11 +20,16 @@
 
 package com.facebook.login;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
 import android.text.Html;
@@ -47,7 +52,17 @@ import com.facebook.GraphRequestAsyncTask;
 import com.facebook.GraphResponse;
 import com.facebook.HttpMethod;
 import com.facebook.R;
+import com.facebook.appevents.AppEventsLogger;
+import com.facebook.devicerequests.internal.DeviceRequestsHelper;
+import com.facebook.internal.AnalyticsEvents;
+import com.facebook.internal.FetchedAppSettings;
+import com.facebook.internal.FetchedAppSettingsManager;
+import com.facebook.internal.ImageDownloader;
+import com.facebook.internal.ImageRequest;
+import com.facebook.internal.ImageResponse;
+import com.facebook.internal.SmartLoginOption;
 import com.facebook.internal.Utility;
+import com.facebook.internal.Validate;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -58,8 +73,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DeviceAuthDialog extends DialogFragment {
-    private static final String DEVICE_OUATH_ENDPOINT = "oauth/device";
+    private static final String DEVICE_LOGIN_ENDPOINT = "device/login";
+    private static final String DEVICE_LOGIN_STATUS_ENDPOINT = "device/login_status";
     private static final String REQUEST_STATE_KEY = "request_state";
+
+    private static final int LOGIN_ERROR_SUBCODE_EXCESSIVE_POLLING = 1349172;
+    private static final int LOGIN_ERROR_SUBCODE_AUTHORIZATION_DECLINED = 1349173;
+    private static final int LOGIN_ERROR_SUBCODE_AUTHORIZATION_PENDING = 1349174;
+    private static final int LOGIN_ERROR_SUBCODE_CODE_EXPIRED = 1349152;
 
     private ProgressBar progressBar;
     private TextView confirmationCode;
@@ -73,6 +94,8 @@ public class DeviceAuthDialog extends DialogFragment {
     // Used to tell if we are destroying the fragment because it was dismissed or dismissing the
     // fragment because it is being destroyed.
     private boolean isBeingDestroyed = false;
+    private boolean isRetry = false;
+    private LoginClient.Request mRequest = null;
 
     @Nullable
     @Override
@@ -97,26 +120,13 @@ public class DeviceAuthDialog extends DialogFragment {
         return view;
     }
 
+    @NonNull
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         dialog = new Dialog(getActivity(), R.style.com_facebook_auth_dialog);
         LayoutInflater inflater = getActivity().getLayoutInflater();
-        View view = inflater.inflate(R.layout.com_facebook_device_auth_dialog_fragment, null);
-        progressBar = (ProgressBar)view.findViewById(R.id.progress_bar);
-        confirmationCode = (TextView)view.findViewById(R.id.confirmation_code);
 
-        Button cancelButton = (Button) view.findViewById(R.id.cancel_button);
-        cancelButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                onCancel();
-            }
-        });
-
-        TextView instructions = (TextView)view.findViewById(
-                R.id.com_facebook_device_auth_instructions);
-        instructions.setText(
-                Html.fromHtml(getString(R.string.com_facebook_device_auth_instructions)));
+        View view = initializeContentView(DeviceRequestsHelper.isAvailable() && !this.isRetry);
 
         dialog.setContentView(view);
         return dialog;
@@ -156,18 +166,31 @@ public class DeviceAuthDialog extends DialogFragment {
     }
 
     public void startLogin(final LoginClient.Request request) {
-        Bundle parameters = new Bundle();
-        parameters.putString("type", "device_code");
-        parameters.putString("client_id", FacebookSdk.getApplicationId());
+        this.mRequest = request;
+        final Bundle parameters = new Bundle();
         parameters.putString("scope", TextUtils.join(",", request.getPermissions()));
+
+        String redirectUriString = request.getDeviceRedirectUriString();
+        if (redirectUriString != null) {
+            parameters.putString("redirect_uri", redirectUriString);
+        }
+
+        String accessToken = Validate.hasAppID()+ "|" + Validate.hasClientToken();
+        parameters.putString(GraphRequest.ACCESS_TOKEN_PARAM, accessToken);
+        parameters.putString(DeviceRequestsHelper.DEVICE_INFO_PARAM,
+                             DeviceRequestsHelper.getDeviceInfo());
+
         GraphRequest graphRequest = new GraphRequest(
                 null,
-                DEVICE_OUATH_ENDPOINT,
+                DEVICE_LOGIN_ENDPOINT,
                 parameters,
                 HttpMethod.POST,
                 new GraphRequest.Callback() {
             @Override
             public void onCompleted(GraphResponse response) {
+                if (isBeingDestroyed) {
+                    return;
+                }
                 if (response.getError() != null) {
                     onError(response.getError().getException());
                     return;
@@ -196,12 +219,45 @@ public class DeviceAuthDialog extends DialogFragment {
         confirmationCode.setVisibility(View.VISIBLE);
         progressBar.setVisibility(View.GONE);
 
+        if (!isRetry) {
+            if (DeviceRequestsHelper.startAdvertisementService(currentRequestState.getUserCode())) {
+                final AppEventsLogger logger = AppEventsLogger.newLogger(getContext());
+                logger.logSdkEvent(AnalyticsEvents.EVENT_SMART_LOGIN_SERVICE, null, null);
+            }
+        }
+
         // If we polled within the last interval schedule a poll else start a poll.
         if (currentRequestState.withinLastRefreshWindow()) {
             schedulePoll();
         } else {
             poll();
         }
+    }
+
+    private View initializeContentView(boolean isSmartLogin) {
+        View view;
+        LayoutInflater inflater = this.getActivity().getLayoutInflater();
+        if (isSmartLogin) {
+            view = inflater.inflate(R.layout.com_facebook_smart_device_dialog_fragment, null);
+        } else {
+            view = inflater.inflate(R.layout.com_facebook_device_auth_dialog_fragment, null);
+        }
+        progressBar = (ProgressBar)view.findViewById(R.id.progress_bar);
+        confirmationCode = (TextView)view.findViewById(R.id.confirmation_code);
+
+        Button cancelButton = (Button) view.findViewById(R.id.cancel_button);
+        cancelButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onCancel();
+            }
+        });
+
+        TextView instructions = (TextView)view.findViewById(
+                R.id.com_facebook_device_auth_instructions);
+        instructions.setText(
+                Html.fromHtml(getString(R.string.com_facebook_device_auth_instructions)));
+        return view;
     }
 
     private void poll() {
@@ -223,13 +279,10 @@ public class DeviceAuthDialog extends DialogFragment {
 
     private GraphRequest getPollRequest() {
         Bundle parameters = new Bundle();
-        parameters.putString("type", "device_token");
-        parameters.putString("client_id", FacebookSdk.getApplicationId());
         parameters.putString("code", currentRequestState.getRequestCode());
-
         return new GraphRequest(
                 null,
-                DEVICE_OUATH_ENDPOINT,
+                DEVICE_LOGIN_STATUS_ENDPOINT,
                 parameters,
                 HttpMethod.POST,
                 new GraphRequest.Callback() {
@@ -244,19 +297,21 @@ public class DeviceAuthDialog extends DialogFragment {
                         if (error != null) {
                             // We need to decide if this is a fatal error by checking the error
                             // message text
-                            String errorMessage = error.getErrorMessage();
-                            if (errorMessage.equals("authorization_pending") ||
-                                    errorMessage.equals("slow_down")) {
-                                // Keep polling. If we got the slow down message just ignore
-                                schedulePoll();
-                                return;
-                            } else if (errorMessage.equals("authorization_declined") ||
-                                    errorMessage.equals("code_expired")) {
-                                onCancel();
-                                return;
+                            switch (error.getSubErrorCode()) {
+                                case LOGIN_ERROR_SUBCODE_AUTHORIZATION_PENDING:
+                                case LOGIN_ERROR_SUBCODE_EXCESSIVE_POLLING: {
+                                    // Keep polling. If we got the slow down message just ignore
+                                    schedulePoll();
+                                } break;
+                                case LOGIN_ERROR_SUBCODE_CODE_EXPIRED:
+                                case LOGIN_ERROR_SUBCODE_AUTHORIZATION_DECLINED: {
+                                    onCancel();
+                                } break;
+                                default: {
+                                    onError(response.getError().getException());
+                                }
+                                break;
                             }
-
-                            onError(response.getError().getException());
                             return;
                         }
 
@@ -270,9 +325,37 @@ public class DeviceAuthDialog extends DialogFragment {
                 });
     }
 
+    private void presentConfirmation(final String userId,
+                                     final Utility.PermissionsPair permissions,
+                                     final String accessToken,
+                                     final String name) {
+        final String message = getResources().getString(
+            R.string.com_facebook_smart_login_confirmation_title);
+        final String continueFormat = getResources().getString(
+            R.string.com_facebook_smart_login_confirmation_continue_as);
+        final String cancel = getResources().getString(
+            R.string.com_facebook_smart_login_confirmation_cancel);
+        final String continueText = String.format(continueFormat, name);
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+        builder.setMessage(message)
+                .setCancelable(true)
+                .setNegativeButton(continueText, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface alertDialog, int which) {
+                        completeLogin(userId, permissions, accessToken);
+                    }
+                })
+                .setPositiveButton(cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface alertDialog, int which) {
+                        View view = initializeContentView(false);
+                        dialog.setContentView(view);
+                        startLogin(mRequest);
+                    }
+                });
+        builder.create().show();
+    }
     private void onSuccess(final String accessToken) {
         Bundle parameters = new Bundle();
-        parameters.putString("fields", "id,permissions");
+        parameters.putString("fields", "id,permissions,name");
         AccessToken temporaryToken = new AccessToken(
                 accessToken,
                 FacebookSdk.getApplicationId(),
@@ -302,28 +385,48 @@ public class DeviceAuthDialog extends DialogFragment {
 
                         String userId;
                         Utility.PermissionsPair permissions;
+                        String name;
                         try {
                             JSONObject jsonObject = response.getJSONObject();
                             userId = jsonObject.getString("id");
                             permissions = Utility.handlePermissionResponse(jsonObject);
+                            name = jsonObject.getString("name");
                         } catch (JSONException ex) {
                             onError(new FacebookException(ex));
                             return;
                         }
+                        DeviceRequestsHelper.cleanUpAdvertisementService(
+                                currentRequestState.getUserCode());
 
-                        deviceAuthMethodHandler.onSuccess(
-                                accessToken,
-                                FacebookSdk.getApplicationId(),
-                                userId,
-                                permissions.getGrantedPermissions(),
-                                permissions.getDeclinedPermissions(),
-                                AccessTokenSource.DEVICE_AUTH,
-                                null,
-                                null);
-                        dialog.dismiss();
+                        boolean requireConfirm =
+                                FetchedAppSettingsManager.
+                                getAppSettingsWithoutQuery(FacebookSdk.getApplicationId()).
+                                getSmartLoginOptions().contains(SmartLoginOption.RequireConfirm);
+                        if (requireConfirm && !isRetry) {
+                            isRetry = true;
+                            presentConfirmation(userId, permissions, accessToken, name);
+                            return;
+                        }
+
+                        completeLogin(userId, permissions, accessToken);
                     }
                 });
         request.executeAsync();
+    }
+
+    private void completeLogin(String userId,
+                               Utility.PermissionsPair permissions,
+                               String accessToken) {
+        deviceAuthMethodHandler.onSuccess(
+                accessToken,
+                FacebookSdk.getApplicationId(),
+                userId,
+                permissions.getGrantedPermissions(),
+                permissions.getDeclinedPermissions(),
+                AccessTokenSource.DEVICE_AUTH,
+                null,
+                null);
+        dialog.dismiss();
     }
 
     private void onError(FacebookException ex) {
@@ -331,6 +434,9 @@ public class DeviceAuthDialog extends DialogFragment {
             return;
         }
 
+        if (currentRequestState != null) {
+            DeviceRequestsHelper.cleanUpAdvertisementService(currentRequestState.getUserCode());
+        }
         deviceAuthMethodHandler.onError(ex);
         dialog.dismiss();
     }
@@ -339,6 +445,10 @@ public class DeviceAuthDialog extends DialogFragment {
         if (!completed.compareAndSet(false, true)) {
             // Should not have happened but we called cancel twice
             return;
+        }
+
+        if (currentRequestState != null) {
+            DeviceRequestsHelper.cleanUpAdvertisementService(currentRequestState.getUserCode());
         }
 
         if (deviceAuthMethodHandler != null) {

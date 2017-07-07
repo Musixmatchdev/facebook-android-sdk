@@ -37,9 +37,12 @@ class LoginLogger {
     // Constants for logging login-related data.
     static final String EVENT_NAME_LOGIN_METHOD_START = "fb_mobile_login_method_start";
     static final String EVENT_NAME_LOGIN_METHOD_COMPLETE = "fb_mobile_login_method_complete";
+    static final String EVENT_NAME_LOGIN_METHOD_NOT_TRIED = "fb_mobile_login_method_not_tried";
     static final String EVENT_PARAM_METHOD_RESULT_SKIPPED = "skipped";
     static final String EVENT_NAME_LOGIN_START = "fb_mobile_login_start";
     static final String EVENT_NAME_LOGIN_COMPLETE = "fb_mobile_login_complete";
+    static final String EVENT_NAME_LOGIN_STATUS_START = "fb_mobile_login_status_start";
+    static final String EVENT_NAME_LOGIN_STATUS_COMPLETE = "fb_mobile_login_status_complete";
     // Note: to ensure stability of column mappings across the four different event types, we
     // prepend a column index to each name, and we log all columns with all events, even if they are
     // empty.
@@ -50,6 +53,7 @@ class LoginLogger {
     static final String EVENT_PARAM_ERROR_CODE = "4_error_code";
     static final String EVENT_PARAM_ERROR_MESSAGE = "5_error_message";
     static final String EVENT_PARAM_EXTRAS = "6_extras";
+    static final String EVENT_PARAM_CHALLENGE = "7_challenge";
     static final String EVENT_EXTRAS_TRY_LOGIN_ACTIVITY = "try_login_activity";
     static final String EVENT_EXTRAS_MISSING_INTERNET_PERMISSION = "no_internet_permission";
     static final String EVENT_EXTRAS_NOT_TRIED = "not_tried";
@@ -60,6 +64,7 @@ class LoginLogger {
     static final String EVENT_EXTRAS_DEFAULT_AUDIENCE = "default_audience";
     static final String EVENT_EXTRAS_IS_REAUTHORIZE = "isReauthorize";
     static final String EVENT_EXTRAS_FACEBOOK_VERSION = "facebookVersion";
+    static final String EVENT_EXTRAS_FAILURE = "failure";
 
     static final String FACEBOOK_PACKAGE_NAME = "com.facebook.katana";
 
@@ -141,7 +146,7 @@ class LoginLogger {
 
         // Combine extras from the request and from the result.
         JSONObject jsonObject = null;
-        if (loggingExtras.isEmpty() == false) {
+        if (!loggingExtras.isEmpty()) {
             jsonObject = new JSONObject(loggingExtras);
         }
         if (resultExtras != null) {
@@ -190,6 +195,41 @@ class LoginLogger {
         bundle.putString(EVENT_PARAM_METHOD, method);
 
         appEventsLogger.logSdkEvent(EVENT_NAME_LOGIN_METHOD_COMPLETE, null, bundle);
+    }
+
+    public void logAuthorizationMethodNotTried(String authId, String method) {
+        Bundle bundle = LoginLogger.newAuthorizationLoggingBundle(authId);
+        bundle.putString(EVENT_PARAM_METHOD, method);
+
+        appEventsLogger.logSdkEvent(EVENT_NAME_LOGIN_METHOD_NOT_TRIED, null, bundle);
+    }
+
+    public void logLoginStatusStart(final String loggerRef) {
+        Bundle bundle = LoginLogger.newAuthorizationLoggingBundle(loggerRef);
+        appEventsLogger.logSdkEvent(EVENT_NAME_LOGIN_STATUS_START, null, bundle);
+    }
+
+    public void logLoginStatusSuccess(final String loggerRef) {
+        Bundle bundle = LoginLogger.newAuthorizationLoggingBundle(loggerRef);
+        bundle.putString(
+            EVENT_PARAM_LOGIN_RESULT,
+            LoginClient.Result.Code.SUCCESS.getLoggingValue());
+        appEventsLogger.logSdkEvent(EVENT_NAME_LOGIN_STATUS_COMPLETE, null, bundle);
+    }
+
+    public void logLoginStatusFailure(final String loggerRef) {
+        Bundle bundle = LoginLogger.newAuthorizationLoggingBundle(loggerRef);
+        bundle.putString(EVENT_PARAM_LOGIN_RESULT, EVENT_EXTRAS_FAILURE);
+        appEventsLogger.logSdkEvent(EVENT_NAME_LOGIN_STATUS_COMPLETE, null, bundle);
+    }
+
+    public void logLoginStatusError(final String loggerRef, final Exception exception) {
+        Bundle bundle = LoginLogger.newAuthorizationLoggingBundle(loggerRef);
+        bundle.putString(
+            EVENT_PARAM_LOGIN_RESULT,
+            LoginClient.Result.Code.ERROR.getLoggingValue());
+        bundle.putString(EVENT_PARAM_ERROR_MESSAGE, exception.toString());
+        appEventsLogger.logSdkEvent(EVENT_NAME_LOGIN_STATUS_COMPLETE, null, bundle);
     }
 
     public void logUnexpectedError(String eventName, String errorMessage) {

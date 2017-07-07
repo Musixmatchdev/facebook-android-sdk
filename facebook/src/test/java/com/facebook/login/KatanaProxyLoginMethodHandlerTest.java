@@ -32,7 +32,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.robolectric.Robolectric;
 import org.robolectric.RuntimeEnvironment;
 
 import java.util.Date;
@@ -56,6 +55,7 @@ public class KatanaProxyLoginMethodHandlerTest extends LoginHandlerTestCase {
     @Override
     public void before() throws Exception {
         super.before();
+        FacebookSdk.setApplicationId("123456789");
         FacebookSdk.sdkInitialize(RuntimeEnvironment.application);
     }
 

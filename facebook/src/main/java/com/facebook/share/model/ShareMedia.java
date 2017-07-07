@@ -22,11 +22,21 @@ package com.facebook.share.model;
 
 import android.os.Bundle;
 import android.os.Parcel;
+import android.os.Parcelable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Base class for shared media (photos, videos, etc).
  */
 public abstract class ShareMedia implements ShareModel {
+
+    public enum Type {
+        PHOTO,
+        VIDEO,
+        ;
+    }
 
     private final Bundle params;
 
@@ -55,6 +65,8 @@ public abstract class ShareMedia implements ShareModel {
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeBundle(params);
     }
+
+    public abstract Type getMediaType();
 
     /**
      * Builder for the {@link com.facebook.share.model.ShareMedia} class.
@@ -87,6 +99,23 @@ public abstract class ShareMedia implements ShareModel {
                 return (B) this;
             }
             return this.setParameters(model.getParameters());
+        }
+
+        static void writeListTo(
+                final Parcel out,
+                int parcelFlags,
+                final List<ShareMedia> media) {
+            out.writeParcelableArray((ShareMedia[]) media.toArray(), parcelFlags);
+        }
+
+        static List<ShareMedia> readListFrom(final Parcel in) {
+            Parcelable[] parcelables = in.readParcelableArray(
+                    ShareMedia.class.getClassLoader());
+            List<ShareMedia> shareMedia = new ArrayList<>(parcelables.length);
+            for (Parcelable parcelable : parcelables) {
+                shareMedia.add((ShareMedia) parcelable);
+            }
+            return shareMedia;
         }
     }
 }

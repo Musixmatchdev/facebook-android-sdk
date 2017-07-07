@@ -28,32 +28,60 @@ public enum LoginBehavior {
      * Specifies that login should attempt login in using the Facebook App, and if that
      * does not work fall back to web dialog auth. This is the default behavior.
      */
-    NATIVE_WITH_FALLBACK(true, true, false),
+    NATIVE_WITH_FALLBACK(true, true, true, false, true, true),
 
     /**
      * Specifies that login should only attempt to login using the Facebook App.
      * If the Facebook App cannot be used then the login fails.
      */
-    NATIVE_ONLY(true, false, false),
+    NATIVE_ONLY(true, true, false, false, false, true),
+
+    /**
+     * Specifies that login should only attempt to use Katana Proxy Login.
+     */
+    KATANA_ONLY(false, true, false, false, false, false),
 
     /**
      * Specifies that only the web dialog auth should be used.
      */
-    WEB_ONLY(false, true, false),
+    WEB_ONLY(false, false, true, false, true, false),
 
-    DEVICE_AUTH(false, false, true);
+    /**
+     * Specifies that only the web view dialog auth should be used.
+     */
+    WEB_VIEW_ONLY(false, false, true, false, false, false),
 
+    /**
+     * Specifies that device login authentication flow should be used.
+     * Use it via ({@link com.facebook.login.widget.DeviceLoginButton DeviceLoginButton}
+     * or ({@link com.facebook.login.DeviceLoginManager DeviceLoginManager} to authenticate.
+     */
+    DEVICE_AUTH(false, false, false, true, false, false);
+
+    private final boolean allowsGetTokenAuth;
     private final boolean allowsKatanaAuth;
     private final boolean allowsWebViewAuth;
     private final boolean allowsDeviceAuth;
+    private final boolean allowsCustomTabAuth;
+    private final boolean allowsFacebookLiteAuth;
 
-    private LoginBehavior(
+    LoginBehavior(
+            boolean allowsGetTokenAuth,
             boolean allowsKatanaAuth,
             boolean allowsWebViewAuth,
-            boolean allowsDeviceAuth) {
+            boolean allowsDeviceAuth,
+            boolean allowsCustomTabAuth,
+            boolean allowsFacebookLiteAuth) {
+        this.allowsGetTokenAuth = allowsGetTokenAuth;
         this.allowsKatanaAuth = allowsKatanaAuth;
         this.allowsWebViewAuth = allowsWebViewAuth;
         this.allowsDeviceAuth = allowsDeviceAuth;
+        this.allowsCustomTabAuth = allowsCustomTabAuth;
+        this.allowsFacebookLiteAuth = allowsFacebookLiteAuth;
+    }
+
+    boolean allowsGetTokenAuth() {
+        return allowsGetTokenAuth;
     }
 
     boolean allowsKatanaAuth() {
@@ -66,5 +94,13 @@ public enum LoginBehavior {
 
     boolean allowsDeviceAuth() {
         return allowsDeviceAuth;
+    }
+
+    boolean allowsCustomTabAuth() {
+        return allowsCustomTabAuth;
+    }
+
+    boolean allowsFacebookLiteAuth() {
+        return allowsFacebookLiteAuth;
     }
 }

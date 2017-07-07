@@ -26,7 +26,6 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 
 import com.facebook.FacebookCallback;
-import com.facebook.FacebookException;
 import com.facebook.internal.AppCall;
 import com.facebook.internal.CallbackManagerImpl;
 import com.facebook.internal.DialogPresenter;
@@ -40,8 +39,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A dialog for joining app groups
+ * @deprecated
+ * App and game groups are being deprecated. See
+ * https://developers.facebook.com/docs/games/services/game-groups for more information.
  */
+@Deprecated
 public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupDialog.Result> {
 
     private static final String JOIN_GAME_GROUP_DIALOG = "game_group_join";
@@ -50,8 +52,11 @@ public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupD
             CallbackManagerImpl.RequestCodeOffset.AppGroupJoin.toRequestCode();
 
     /**
-     * Helper object for handling the result from a join app group dialog.
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public static final class Result {
         private final Bundle data;
 
@@ -69,21 +74,21 @@ public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupD
     }
 
     /**
-     * Indicates whether the join app group dialog can be shown.
-     *
-     * @return true if the dialog can be shown
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public static boolean canShow() {
         return true;
     }
 
     /**
-     * Shows an {@link JoinAppGroupDialog} to join a group with the passed in Id, using
-     * the passed in activity. No callback will be invoked.
-     *
-     * @param activity Activity hosting the dialog
-     * @param groupId Id of the group to join
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public static void show(
             final Activity activity,
             final String groupId) {
@@ -91,12 +96,11 @@ public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupD
     }
 
     /**
-     * Shows an {@link JoinAppGroupDialog} to join a group with the passed in Id, using
-     * the passed in fragment. No callback will be invoked.
-     *
-     * @param fragment android.support.v4.app.Fragment hosting the dialog
-     * @param groupId Id of the group to join
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public static void show(
             final Fragment fragment,
             final String groupId) {
@@ -104,12 +108,11 @@ public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupD
     }
 
     /**
-     * Shows an {@link JoinAppGroupDialog} to join a group with the passed in Id, using
-     * the passed in fragment. No callback will be invoked.
-     *
-     * @param fragment android.app.Fragment hosting the dialog
-     * @param groupId Id of the group to join
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public static void show(
             final android.app.Fragment fragment,
             final String groupId) {
@@ -123,25 +126,31 @@ public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupD
     }
 
     /**
-     * Constructs a JoinAppGroupDialog.
-     * @param activity Activity hosting the dialog.
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public JoinAppGroupDialog(final Activity activity) {
         super(activity, DEFAULT_REQUEST_CODE);
     }
 
     /**
-     * Constructs a JoinAppGroupDialog.
-     * @param fragment android.support.v4.app.Fragment hosting the dialog.
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public JoinAppGroupDialog(final Fragment fragment) {
         this(new FragmentWrapper(fragment));
     }
 
     /**
-     * Constructs a JoinAppGroupDialog.
-     * @param fragment android.app.Fragment hosting the dialog.
+     * @deprecated
+     * App and game groups are being deprecated. See
+     * https://developers.facebook.com/docs/games/services/game-groups for more information.
      */
+    @Deprecated
     public JoinAppGroupDialog(final android.app.Fragment fragment) {
         this(new FragmentWrapper(fragment));
     }
@@ -192,7 +201,7 @@ public class JoinAppGroupDialog extends FacebookDialogBase<String, JoinAppGroupD
 
     private class WebHandler extends ModeHandler {
         @Override
-        public boolean canShow(final String content) {
+        public boolean canShow(final String content, boolean isBestEffort) {
             return true;
         }
 

@@ -2,9 +2,9 @@
 include ':facebook'
 
 if (file('internal/internal-settings.gradle').exists()) {
-  apply from: 'internal/internal-settings.gradle'
+    apply from: 'internal/internal-settings.gradle'
 }
 
 if (file('local.gradle').exists()) {
-  apply from: 'local.gradle'
+    apply from: 'local.gradle'
 }

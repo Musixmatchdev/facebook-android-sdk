@@ -27,6 +27,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 
@@ -66,6 +67,7 @@ import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.*;
 
 @PrepareForTest({ FacebookSdk.class, AccessToken.class, Profile.class})
@@ -98,6 +100,7 @@ public class LoginManagerTest extends FacebookPowerMockTestCase {
         when(FacebookSdk.getApplicationContext()).thenReturn(mockApplicationContext);
         when(FacebookSdk.getExecutor()).thenReturn(threadExecutor);
         when(mockFragment.getActivity()).thenReturn(mockFragmentActivity);
+        when(mockActivity.getApplicationContext()).thenReturn(mockApplicationContext);
 
         // We use mocks rather than RobolectricPackageManager because it's simpler to not
         // have to specify Intents. Default to resolving all intents to something.
@@ -264,8 +267,9 @@ public class LoginManagerTest extends FacebookPowerMockTestCase {
             @Override
             public boolean matches(Object argument) {
                 Intent orig = (Intent)argument;
+                Bundle bundle = orig.getBundleExtra(LoginFragment.REQUEST_KEY);
                 LoginClient.Request request =
-                        (LoginClient.Request)orig.getParcelableExtra(LoginFragment.EXTRA_REQUEST);
+                        (LoginClient.Request)bundle.getParcelable(LoginFragment.EXTRA_REQUEST);
                 assertEquals(MOCK_APP_ID, request.getApplicationId());
                 assertEquals(LoginBehavior.NATIVE_ONLY, request.getLoginBehavior());
                 assertEquals(DefaultAudience.EVERYONE, request.getDefaultAudience());

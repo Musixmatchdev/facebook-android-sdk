@@ -75,6 +75,10 @@ public final class CallbackManagerImpl implements CallbackManager {
         callbacks.put(requestCode, callback);
     }
 
+    public void unregisterCallback(int requestCode) {
+        callbacks.remove(requestCode);
+    }
+
     @Override
     public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
         Callback callback = callbacks.get(requestCode);
@@ -97,6 +101,7 @@ public final class CallbackManagerImpl implements CallbackManager {
         AppGroupCreate(5),
         AppGroupJoin(6),
         AppInvite(7),
+        DeviceShare(8),
         ;
 
         private final int offset;

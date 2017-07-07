@@ -25,9 +25,6 @@ import android.os.Parcelable;
 
 import com.facebook.share.model.ShareContent;
 
-import java.util.HashMap;
-import java.util.Map;
-
 // This class is used specifically for backwards support in unity for various feed parameters
 // Currently this content is only supported if you set the mode to Feed when sharing.
 public class ShareFeedContent
@@ -186,13 +183,5 @@ public class ShareFeedContent
                     .setMediaSource(model.getMediaSource())
                     ;
         }
-
-        @Override
-        public Builder readFrom(final Parcel parcel) {
-            return this.readFrom(
-                    (ShareFeedContent) parcel.readParcelable(
-                            ShareFeedContent.class.getClassLoader()));
-        }
-
     }
 }

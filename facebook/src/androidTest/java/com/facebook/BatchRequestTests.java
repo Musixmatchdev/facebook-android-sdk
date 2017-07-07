@@ -23,6 +23,7 @@ package com.facebook;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.Suppress;
 
 import com.facebook.share.internal.ShareInternalUtility;
 
@@ -62,75 +63,6 @@ public class BatchRequestTests extends FacebookTestCase {
         GraphRequest request1 = new GraphRequest(null, "TourEiffel", null, null, new ExpectFailureCallback());
         GraphRequest request2 = new GraphRequest(null, "SpaceNeedle", null, null, new ExpectFailureCallback());
         GraphRequest.executeBatchAndWait(request1, request2);
-    }
-
-    @LargeTest
-    public void testExecuteBatchRequestsPathEncoding() throws IOException {
-        // ensures that paths passed to batch requests are encoded properly before
-        // we send it up to the server
-
-        final AccessToken accessToken = getAccessTokenForSharedUser();
-
-        Bundle parameters = new Bundle();
-        parameters.putString("fields", "location");
-
-        GraphRequest request1 = new GraphRequest(
-                accessToken,
-                "TourEiffel",
-                parameters,
-                null);
-        request1.setBatchEntryName("eiffel");
-        request1.setBatchEntryOmitResultOnSuccess(false);
-        GraphRequest request2 = new GraphRequest(
-                accessToken,
-                "{result=eiffel:$.id}",
-                parameters,
-                null);
-
-        List<GraphResponse> responses = GraphRequest.executeBatchAndWait(request1, request2);
-        assertEquals(2, responses.size());
-        assertTrue(responses.get(0).getError() == null);
-        assertTrue(responses.get(1).getError() == null);
-
-        JSONObject eiffelTower1 = responses.get(0).getJSONObject();
-        JSONObject eiffelTower2 = responses.get(1).getJSONObject();
-        assertTrue(eiffelTower1 != null);
-        assertTrue(eiffelTower2 != null);
-
-        assertEquals("Paris", eiffelTower1.optJSONObject("location").optString("city"));
-        assertEquals("Paris", eiffelTower2.optJSONObject("location").optString("city"));
-    }
-
-    @LargeTest
-    public void testExecuteBatchedGets() throws IOException {
-        final AccessToken accessToken = getAccessTokenForSharedUser();
-
-        Bundle parameters = new Bundle();
-        parameters.putString("fields", "location");
-
-        GraphRequest request1 = new GraphRequest(
-                accessToken,
-                "TourEiffel",
-                parameters,
-                null);
-        GraphRequest request2 = new GraphRequest(
-                accessToken,
-                "SpaceNeedle",
-                parameters,
-                null);
-
-        List<GraphResponse> responses = GraphRequest.executeBatchAndWait(request1, request2);
-        assertEquals(2, responses.size());
-        assertTrue(responses.get(0).getError() == null);
-        assertTrue(responses.get(1).getError() == null);
-
-        JSONObject eiffelTower = responses.get(0).getJSONObject();
-        JSONObject spaceNeedle = responses.get(1).getJSONObject();
-        assertTrue(eiffelTower != null);
-        assertTrue(spaceNeedle != null);
-
-        assertEquals("Paris", eiffelTower.optJSONObject("location").optString("city"));
-        assertEquals("Seattle", spaceNeedle.optJSONObject("location").optString("city"));
     }
 
     @LargeTest

@@ -23,7 +23,6 @@ package com.facebook.share.model;
 import android.os.Parcel;
 import android.text.TextUtils;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -303,8 +302,7 @@ public final class GameRequestContent implements ShareModel {
                     .setSuggestions(content.getSuggestions());
         }
 
-        @Override
-        public Builder readFrom(final Parcel parcel) {
+        Builder readFrom(final Parcel parcel) {
             return this.readFrom(
                     (GameRequestContent) parcel.readParcelable(
                             GameRequestContent.class.getClassLoader()));

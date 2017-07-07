@@ -25,4 +25,5 @@
     one does not stick out-->
     <dimen name="com_facebook_auth_dialog_corner_radius_oversized">4dp</dimen>
     <dimen name="com_facebook_button_corner_radius">2dp</dimen>
+    <dimen name="com_facebook_button_login_corner_radius">3dp</dimen>
 </resources>

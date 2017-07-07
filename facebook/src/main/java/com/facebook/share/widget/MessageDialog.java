@@ -202,7 +202,7 @@ public final class MessageDialog
 
     private class NativeHandler extends ModeHandler {
         @Override
-        public boolean canShow(final ShareContent shareContent) {
+        public boolean canShow(final ShareContent shareContent, boolean isBestEffort) {
             return shareContent != null && MessageDialog.canShow(shareContent.getClass());
         }
 
@@ -212,7 +212,6 @@ public final class MessageDialog
 
             final AppCall appCall = createBaseAppCall();
             final boolean shouldFailOnDataError = getShouldFailOnDataError();
-            final Activity activity = getActivityContext();
 
             DialogPresenter.setupAppCallForNativeDialog(
                     appCall,

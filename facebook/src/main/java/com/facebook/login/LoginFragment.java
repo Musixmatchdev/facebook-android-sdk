@@ -42,6 +42,7 @@ import com.facebook.R;
 
 public class LoginFragment extends Fragment {
     static final String RESULT_KEY = "com.facebook.LoginFragment:Result";
+    static final String REQUEST_KEY = "com.facebook.LoginFragment:Request";
     static final String EXTRA_REQUEST = "request";
 
     private static final String TAG = "LoginFragment";
@@ -57,12 +58,11 @@ public class LoginFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         if (savedInstanceState != null) {
             loginClient = savedInstanceState.getParcelable(SAVED_LOGIN_CLIENT);
             loginClient.setFragment(this);
         } else {
-            loginClient = new LoginClient(this);
+            loginClient = createLoginClient();
         }
 
         loginClient.setOnCompletedListener(new LoginClient.OnCompletedListener() {
@@ -80,12 +80,13 @@ public class LoginFragment extends Fragment {
         initializeCallingPackage(activity);
         if (activity.getIntent() != null) {
             Intent intent = activity.getIntent();
-            // Set the class loader explicitly to avoid a possible issue where the wrong
-            // class loader is used by android for unmarshalling LoginClient.Request on
-            // Samsung devices
-            intent.setExtrasClassLoader(LoginClient.Request.class.getClassLoader());
-            request = (LoginClient.Request)intent.getParcelableExtra(EXTRA_REQUEST);
+            Bundle bundle = intent.getBundleExtra(REQUEST_KEY);
+            request = bundle.getParcelable(EXTRA_REQUEST);
         }
+    }
+
+    protected LoginClient createLoginClient() {
+        return new LoginClient(this);
     }
 
     @Override

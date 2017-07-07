@@ -21,7 +21,6 @@
 package com.facebook.internal;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -43,7 +42,6 @@ import android.webkit.CookieSyncManager;
 
 import com.facebook.AccessToken;
 import com.facebook.FacebookException;
-import com.facebook.FacebookRequestError;
 import com.facebook.FacebookSdk;
 import com.facebook.GraphRequest;
 import com.facebook.GraphResponse;
@@ -54,16 +52,36 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.Closeable;
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URLConnection;
-
 import java.net.URLDecoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
@@ -78,33 +96,9 @@ public final class Utility {
     private static final String HASH_ALGORITHM_MD5 = "MD5";
     private static final String HASH_ALGORITHM_SHA1 = "SHA-1";
     private static final String URL_SCHEME = "https";
-    private static final String APP_SETTINGS_PREFS_STORE =
-            "com.facebook.internal.preferences.APP_SETTINGS";
-    private static final String APP_SETTINGS_PREFS_KEY_FORMAT =
-            "com.facebook.internal.APP_SETTINGS.%s";
-    private static final String APP_SETTING_SUPPORTS_IMPLICIT_SDK_LOGGING =
-            "supports_implicit_sdk_logging";
-    private static final String APP_SETTING_NUX_CONTENT = "gdpv4_nux_content";
-    private static final String APP_SETTING_NUX_ENABLED = "gdpv4_nux_enabled";
-    private static final String APP_SETTING_DIALOG_CONFIGS = "android_dialog_configs";
-    private static final String APP_SETTING_ANDROID_SDK_ERROR_CATEGORIES =
-            "android_sdk_error_categories";
     private static final String EXTRA_APP_EVENTS_INFO_FORMAT_VERSION = "a2";
-    private static final String DIALOG_CONFIG_DIALOG_NAME_FEATURE_NAME_SEPARATOR = "\\|";
-    private static final String DIALOG_CONFIG_NAME_KEY = "name";
-    private static final String DIALOG_CONFIG_VERSIONS_KEY = "versions";
-    private static final String DIALOG_CONFIG_URL_KEY = "url";
 
     private final static String UTF8 = "UTF-8";
-
-    private static final String[] APP_SETTING_FIELDS = new String[]{
-            APP_SETTING_SUPPORTS_IMPLICIT_SDK_LOGGING,
-            APP_SETTING_NUX_CONTENT,
-            APP_SETTING_NUX_ENABLED,
-            APP_SETTING_DIALOG_CONFIGS,
-            APP_SETTING_ANDROID_SDK_ERROR_CATEGORIES
-    };
-    private static final String APPLICATION_FIELDS = "fields";
 
     // This is the default used by the buffer streams, but they trace a warning if you do not
     // specify.
@@ -117,158 +111,14 @@ public final class Utility {
 
     private static final int GINGERBREAD_MR1 = 10;
 
-    private static Map<String, FetchedAppSettings> fetchedAppSettings =
-            new ConcurrentHashMap<String, FetchedAppSettings>();
-
-    private static AtomicBoolean loadingSettings = new AtomicBoolean(false);
-
     private static int numCPUCores = 0;
 
     private static long timestampOfLastCheck = -1;
     private static long totalExternalStorageGB = -1;
     private static long availableExternalStorageGB = -1;
-    private static String deviceTimezone = "";
+    private static String deviceTimezoneAbbreviation = "";
+    private static String deviceTimeZoneName = "";
     private static String carrierName = noCarrierConstant;
-
-    public static class FetchedAppSettings {
-        private boolean supportsImplicitLogging;
-        private String nuxContent;
-        private boolean nuxEnabled;
-        private Map<String, Map<String, DialogFeatureConfig>> dialogConfigMap;
-        private FacebookRequestErrorClassification errorClassification;
-
-        private FetchedAppSettings(boolean supportsImplicitLogging,
-                                   String nuxContent,
-                                   boolean nuxEnabled,
-                                   Map<String, Map<String, DialogFeatureConfig>> dialogConfigMap,
-                                   FacebookRequestErrorClassification errorClassification) {
-            this.supportsImplicitLogging = supportsImplicitLogging;
-            this.nuxContent = nuxContent;
-            this.nuxEnabled = nuxEnabled;
-            this.dialogConfigMap = dialogConfigMap;
-            this.errorClassification = errorClassification;
-        }
-
-        public boolean supportsImplicitLogging() {
-            return supportsImplicitLogging;
-        }
-
-        public String getNuxContent() {
-            return nuxContent;
-        }
-
-        public boolean getNuxEnabled() {
-            return nuxEnabled;
-        }
-
-        public Map<String, Map<String, DialogFeatureConfig>> getDialogConfigurations() {
-            return dialogConfigMap;
-        }
-
-        public FacebookRequestErrorClassification getErrorClassification() {
-            return errorClassification;
-        }
-    }
-
-    public static class DialogFeatureConfig {
-        private static DialogFeatureConfig parseDialogConfig(JSONObject dialogConfigJSON) {
-            String dialogNameWithFeature = dialogConfigJSON.optString(DIALOG_CONFIG_NAME_KEY);
-            if (Utility.isNullOrEmpty(dialogNameWithFeature)) {
-                return null;
-            }
-
-            String[] components = dialogNameWithFeature.split(
-                    DIALOG_CONFIG_DIALOG_NAME_FEATURE_NAME_SEPARATOR);
-            if (components.length != 2) {
-                // We expect the format to be dialogName|FeatureName, where both components are
-                // non-empty.
-                return null;
-            }
-
-            String dialogName = components[0];
-            String featureName = components[1];
-            if (isNullOrEmpty(dialogName) || isNullOrEmpty(featureName)) {
-                return null;
-            }
-
-            String urlString = dialogConfigJSON.optString(DIALOG_CONFIG_URL_KEY);
-            Uri fallbackUri = null;
-            if (!Utility.isNullOrEmpty(urlString)) {
-                fallbackUri = Uri.parse(urlString);
-            }
-
-            JSONArray versionsJSON = dialogConfigJSON.optJSONArray(DIALOG_CONFIG_VERSIONS_KEY);
-
-            int[] featureVersionSpec = parseVersionSpec(versionsJSON);
-
-            return new DialogFeatureConfig(
-                    dialogName, featureName, fallbackUri, featureVersionSpec);
-        }
-
-        private static int[] parseVersionSpec(JSONArray versionsJSON) {
-            // Null signifies no overrides to the min-version as specified by the SDK.
-            // An empty array would basically turn off the dialog (i.e no supported versions), so
-            // DON'T default to that.
-            int[] versionSpec = null;
-            if (versionsJSON != null) {
-                int numVersions = versionsJSON.length();
-                versionSpec = new int[numVersions];
-                for (int i = 0; i < numVersions; i++) {
-                    // See if the version was stored directly as an Integer
-                    int version = versionsJSON.optInt(i, NativeProtocol.NO_PROTOCOL_AVAILABLE);
-                    if (version == NativeProtocol.NO_PROTOCOL_AVAILABLE) {
-                        // If not, then see if it was stored as a string that can be parsed out.
-                        // If even that fails, then we will leave it as NO_PROTOCOL_AVAILABLE
-                        String versionString = versionsJSON.optString(i);
-                        if (!isNullOrEmpty(versionString)) {
-                            try {
-                                version = Integer.parseInt(versionString);
-                            } catch (NumberFormatException nfe) {
-                                logd(LOG_TAG, nfe);
-                                version = NativeProtocol.NO_PROTOCOL_AVAILABLE;
-                            }
-                        }
-                    }
-
-                    versionSpec[i] = version;
-                }
-            }
-
-            return versionSpec;
-        }
-
-        private String dialogName;
-        private String featureName;
-        private Uri fallbackUrl;
-        private int[] featureVersionSpec;
-
-        private DialogFeatureConfig(
-                String dialogName,
-                String featureName,
-                Uri fallbackUrl,
-                int[] featureVersionSpec) {
-            this.dialogName = dialogName;
-            this.featureName = featureName;
-            this.fallbackUrl = fallbackUrl;
-            this.featureVersionSpec = featureVersionSpec;
-        }
-
-        public String getDialogName() {
-            return dialogName;
-        }
-
-        public String getFeatureName() {
-            return featureName;
-        }
-
-        public Uri getFallbackUrl() {
-            return fallbackUrl;
-        }
-
-        public int[] getVersionSpec() {
-            return featureVersionSpec;
-        }
-    }
 
     /**
      * Each array represents a set of closed or open Range, like so: [0,10,50,60] - Ranges are
@@ -542,9 +392,9 @@ public final class Utility {
         } else if (value instanceof String) {
             bundle.putString(key, (String) value);
         } else if (value instanceof JSONArray) {
-            bundle.putString(key, ((JSONArray) value).toString());
+            bundle.putString(key, value.toString());
         } else if (value instanceof JSONObject) {
-            bundle.putString(key, ((JSONObject) value).toString());
+            bundle.putString(key, value.toString());
         } else {
             return false;
         }
@@ -762,160 +612,6 @@ public final class Utility {
         return idA.equals(idB);
     }
 
-    public static void loadAppSettingsAsync(
-            final Context context,
-            final String applicationId
-    ) {
-        boolean canStartLoading = loadingSettings.compareAndSet(false, true);
-        if (Utility.isNullOrEmpty(applicationId) ||
-                fetchedAppSettings.containsKey(applicationId) ||
-                !canStartLoading) {
-            return;
-        }
-
-        final String settingsKey = String.format(APP_SETTINGS_PREFS_KEY_FORMAT, applicationId);
-
-        FacebookSdk.getExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
-                // See if we had a cached copy and use that immediately.
-                SharedPreferences sharedPrefs = context.getSharedPreferences(
-                        APP_SETTINGS_PREFS_STORE,
-                        Context.MODE_PRIVATE);
-                String settingsJSONString = sharedPrefs.getString(settingsKey, null);
-                if (!isNullOrEmpty(settingsJSONString)) {
-                    JSONObject settingsJSON = null;
-                    try {
-                        settingsJSON = new JSONObject(settingsJSONString);
-                    } catch (JSONException je) {
-                        logd(LOG_TAG, je);
-                    }
-                    if (settingsJSON != null) {
-                        parseAppSettingsFromJSON(applicationId, settingsJSON);
-                    }
-                }
-
-                JSONObject resultJSON = getAppSettingsQueryResponse(applicationId);
-                if (resultJSON != null) {
-                    parseAppSettingsFromJSON(applicationId, resultJSON);
-
-                    sharedPrefs.edit()
-                            .putString(settingsKey, resultJSON.toString())
-                            .apply();
-                }
-
-                loadingSettings.set(false);
-            }
-        });
-    }
-
-    // This call only gets the app settings if they're already fetched
-    public static FetchedAppSettings getAppSettingsWithoutQuery(final String applicationId) {
-        return applicationId != null ? fetchedAppSettings.get(applicationId) : null;
-    }
-
-    // Note that this method makes a synchronous Graph API call, so should not be called from the
-    // main thread.
-    public static FetchedAppSettings queryAppSettings(
-            final String applicationId,
-            final boolean forceRequery) {
-        // Cache the last app checked results.
-        if (!forceRequery && fetchedAppSettings.containsKey(applicationId)) {
-            return fetchedAppSettings.get(applicationId);
-        }
-
-        JSONObject response = getAppSettingsQueryResponse(applicationId);
-        if (response == null) {
-            return null;
-        }
-
-        return parseAppSettingsFromJSON(applicationId, response);
-    }
-
-    private static FetchedAppSettings parseAppSettingsFromJSON(
-            String applicationId,
-            JSONObject settingsJSON) {
-        JSONArray errorClassificationJSON =
-                settingsJSON.optJSONArray(APP_SETTING_ANDROID_SDK_ERROR_CATEGORIES);
-        FacebookRequestErrorClassification errorClassification =
-                errorClassificationJSON == null
-                        ? FacebookRequestErrorClassification.getDefaultErrorClassification()
-                        : FacebookRequestErrorClassification.createFromJSON(
-                        errorClassificationJSON
-                );
-        FetchedAppSettings result = new FetchedAppSettings(
-                settingsJSON.optBoolean(APP_SETTING_SUPPORTS_IMPLICIT_SDK_LOGGING, false),
-                settingsJSON.optString(APP_SETTING_NUX_CONTENT, ""),
-                settingsJSON.optBoolean(APP_SETTING_NUX_ENABLED, false),
-                parseDialogConfigurations(settingsJSON.optJSONObject(APP_SETTING_DIALOG_CONFIGS)),
-                errorClassification
-        );
-
-        fetchedAppSettings.put(applicationId, result);
-
-        return result;
-    }
-
-    // Note that this method makes a synchronous Graph API call, so should not be called from the
-    // main thread.
-    private static JSONObject getAppSettingsQueryResponse(String applicationId) {
-        Bundle appSettingsParams = new Bundle();
-        appSettingsParams.putString(APPLICATION_FIELDS, TextUtils.join(",", APP_SETTING_FIELDS));
-
-        GraphRequest request = GraphRequest.newGraphPathRequest(null, applicationId, null);
-        request.setSkipClientToken(true);
-        request.setParameters(appSettingsParams);
-
-        return request.executeAndWait().getJSONObject();
-    }
-
-    public static DialogFeatureConfig getDialogFeatureConfig(
-            String applicationId,
-            String actionName,
-            String featureName) {
-        if (Utility.isNullOrEmpty(actionName) || Utility.isNullOrEmpty(featureName)) {
-            return null;
-        }
-
-        FetchedAppSettings settings = fetchedAppSettings.get(applicationId);
-        if (settings != null) {
-            Map<String, DialogFeatureConfig> featureMap =
-                    settings.getDialogConfigurations().get(actionName);
-            if (featureMap != null) {
-                return featureMap.get(featureName);
-            }
-        }
-        return null;
-    }
-
-    private static Map<String, Map<String, DialogFeatureConfig>> parseDialogConfigurations(
-            JSONObject dialogConfigResponse) {
-        HashMap<String, Map<String, DialogFeatureConfig>> dialogConfigMap = new HashMap<String, Map<String, DialogFeatureConfig>>();
-
-        if (dialogConfigResponse != null) {
-            JSONArray dialogConfigData = dialogConfigResponse.optJSONArray("data");
-            if (dialogConfigData != null) {
-                for (int i = 0; i < dialogConfigData.length(); i++) {
-                    DialogFeatureConfig dialogConfig = DialogFeatureConfig.parseDialogConfig(
-                            dialogConfigData.optJSONObject(i));
-                    if (dialogConfig == null) {
-                        continue;
-                    }
-
-                    String dialogName = dialogConfig.getDialogName();
-                    Map<String, DialogFeatureConfig> featureMap = dialogConfigMap.get(dialogName);
-                    if (featureMap == null) {
-                        featureMap = new HashMap<String, DialogFeatureConfig>();
-                        dialogConfigMap.put(dialogName, featureMap);
-                    }
-                    featureMap.put(dialogConfig.getFeatureName(), dialogConfig);
-                }
-            }
-        }
-
-        return dialogConfigMap;
-    }
-
     public static String safeGetStringFromResponse(JSONObject response, String propertyName) {
         return response != null ? response.optString(propertyName, "") : "";
     }
@@ -1033,7 +729,7 @@ public final class Utility {
         extraInfoArray.put(Build.MODEL);
 
         // Locale
-        Locale locale = null;
+        Locale locale;
         try {
             locale = appContext.getResources().getConfiguration().locale;
         } catch (Exception e) {
@@ -1042,7 +738,7 @@ public final class Utility {
         extraInfoArray.put(locale.getLanguage() + "_" + locale.getCountry());
 
         // Time zone
-        extraInfoArray.put(deviceTimezone);
+        extraInfoArray.put(deviceTimezoneAbbreviation);
 
         // Carrier
         extraInfoArray.put(carrierName);
@@ -1074,6 +770,8 @@ public final class Utility {
         // External Storage
         extraInfoArray.put(totalExternalStorageGB);
         extraInfoArray.put(availableExternalStorageGB);
+
+        extraInfoArray.put(deviceTimeZoneName);
 
         params.put("extinfo", extraInfoArray.toString());
     }
@@ -1167,7 +865,8 @@ public final class Utility {
     public static boolean isWebUri(final Uri uri) {
         return (uri != null)
                 && ("http".equalsIgnoreCase(uri.getScheme())
-                || "https".equalsIgnoreCase(uri.getScheme()));
+                || "https".equalsIgnoreCase(uri.getScheme())
+                || "fbstaging".equalsIgnoreCase(uri.getScheme()));
     }
 
     public static boolean isContentUri(final Uri uri) {
@@ -1201,7 +900,7 @@ public final class Utility {
             return null;
         }
 
-        long secondsFromBase = Long.MIN_VALUE;
+        long secondsFromBase;
 
         Object secondsObject = bundle.get(key);
         if (secondsObject instanceof Long) {
@@ -1327,7 +1026,6 @@ public final class Utility {
 
         // Enumerate all available CPU files and try to count the number of CPU cores.
         try {
-            int res = 0;
             File cpuDir = new File("/sys/devices/system/cpu/");
             File[] cpuFiles = cpuDir.listFiles(new FilenameFilter() {
                 @Override
@@ -1365,7 +1063,11 @@ public final class Utility {
     private static void refreshTimezone() {
         try {
             TimeZone tz = TimeZone.getDefault();
-            deviceTimezone = tz.getDisplayName(tz.inDaylightTime(new Date()), TimeZone.SHORT);
+            deviceTimezoneAbbreviation = tz.getDisplayName(
+                    tz.inDaylightTime(new Date()),
+                    TimeZone.SHORT
+            );
+            deviceTimeZoneName = tz.getID();
         } catch (Exception e) {
         }
     }
@@ -1478,5 +1180,10 @@ public final class Utility {
         }
 
         return new PermissionsPair(grantedPermissions, declinedPermissions);
+    }
+
+    public static String generateRandomString(int length) {
+        Random r = new Random();
+        return new BigInteger(length * 5, r).toString(32);
     }
 }

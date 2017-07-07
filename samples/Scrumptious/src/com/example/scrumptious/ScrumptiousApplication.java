@@ -32,13 +32,6 @@ import java.util.List;
  * Use a custom Application class to pass state data between Activities.
  */
 public class ScrumptiousApplication extends Application {
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        FacebookSdk.sdkInitialize(getApplicationContext());
-    }
-
     private List<JSONObject> selectedUsers;
     private JSONObject selectedPlace;
 

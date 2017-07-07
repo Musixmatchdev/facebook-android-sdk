@@ -114,7 +114,6 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        FacebookSdk.sdkInitialize(this.getApplicationContext());
 
         callbackManager = CallbackManager.Factory.create();
 
@@ -205,12 +204,6 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     @Override
     protected void onResume() {
         super.onResume();
-
-        // Call the 'activateApp' method to log an app event for use in analytics and advertising
-        // reporting.  Do so in the onResume methods of the primary Activities that an app may be
-        // launched into.
-        AppEventsLogger.activateApp(this);
-
         updateUI();
     }
 
@@ -228,19 +221,10 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
-
-        // Call the 'deactivateApp' method to log an app event for use in analytics and advertising
-        // reporting.  Do so in the onPause methods of the primary Activities that an app may be
-        // launched into.
-        AppEventsLogger.deactivateApp(this);
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
         profileTracker.stopTracking();
+        LoginManager.getInstance().unregisterCallback(callbackManager);
     }
 
     private void updateUI() {
